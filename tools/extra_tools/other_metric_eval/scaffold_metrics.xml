@@ -1,0 +1,41 @@
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+	  <ScoreFunction name="sf" weights="ref2015">
+    </ScoreFunction>
+  </SCOREFXNS>
+  <RESIDUE_SELECTORS>
+  </RESIDUE_SELECTORS>
+  <TASKOPERATIONS>
+  </TASKOPERATIONS>
+  <FILTERS>
+    <ResidueCount name="rescount" />
+    <TotalSasa name="total_sasa" threshold="0.0" confidence="0.0" />
+    <TotalSasa name="hphobe_sasa" threshold="0.0" hydrophobic="True" confidence="0.0"/>
+    <PackStat name="ps" threshold="0.0" chain="0" repeats="1" confidence="0.0"/>
+    <AtomicContactCount name="acc" confidence="0.0"/>
+    <CavityVolume name="cav" confidence="0.0" />
+    <ExposedHydrophobics name="exphyd" confidence="0.0" />
+    <OversaturatedHbondAcceptorFilter name="oversat" scorefxn="sf" max_allowed_oversaturated="100" consider_mainchain_only="false" confidence="0.0"/>
+    <BuriedUnsatHbonds name="buns_sc_heavy" report_sc_heavy_atom_unsats="true" scorefxn="sf" cutoff="10" residue_surface_cutoff="20.0" ignore_surface_res="true" confidence="0.0"/>
+    <BuriedUnsatHbonds name="buns_bb_heavy" report_bb_heavy_atom_unsats="true" scorefxn="sf" cutoff="4" residue_surface_cutoff="20.0" ignore_surface_res="true" confidence="0.0"/>
+    <BuriedSurfaceArea name="bsa" select_only_FAMILYVW="True" filter_out_low="False" confidence="0.0"/>
+  </FILTERS>
+  <MOVERS>
+    <FastRelax name="fr" scorefxn="sf" disable_design="True"/>
+  </MOVERS>
+  <PROTOCOLS>
+    <Add mover_name="fr"/>
+    <Add filter_name="rescount"/>
+    <Add filter_name="total_sasa"/>
+    <Add filter_name="hphobe_sasa"/>
+    <Add filter_name="ps"/>
+    <Add filter_name="acc"/>
+    <Add filter_name="cav"/>
+    <Add filter_name="exphyd"/>
+    <Add filter_name="buns_bb_heavy"/>
+    <Add filter_name="buns_sc_heavy"/>
+    <Add filter_name="bsa"/>
+    <Add filter_name="oversat"/>
+  </PROTOCOLS>
+  <OUTPUT />
+</ROSETTASCRIPTS>

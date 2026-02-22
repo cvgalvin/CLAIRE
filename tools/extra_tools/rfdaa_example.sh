@@ -1,0 +1,3 @@
+python run_inference.py diffuser.T=200 inference.deterministic=True inference.output_prefix=./scaffolds/prg inference.input_pdb=prg_GLY.pdb contigmap.contigs=['105-123'] contigmap.length=105-123 inference.ligand=prg inference.num_designs=2929 inference.design_startnum=0 denoiser.noise_scale_ca=0 denoiser.noise_scale_frame=0 denoiser.noise_scale_torsion=0
+
+python ~/LigandMPNN/run.py --model_type "ligand_mpnn" --checkpoint_ligand_mpnn "LigandMPNN/model_params/ligandmpnn_v_32_030_25.pt" --pdb_path_multi $pdbs_dict --out_folder $out_dir --number_of_batches 8 --temperature 0.2 --pack_side_chains 1 --number_of_packs_per_design 1 --pack_with_ligand_context 1 --repack_everything 1

@@ -1,0 +1,44 @@
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+    <ScoreFunction name="beta" weights="beta_genpot"/>
+  </SCOREFXNS>
+  <RESIDUE_SELECTORS>
+    <Chain name="chX" chains="X"/>
+  </RESIDUE_SELECTORS>
+  <TASKOPERATIONS>
+    <ReadResfile name="resfile"/>
+    <InitializeFromCommandline name="ifc"/>
+    <ProteinLigandInterfaceUpweighter name="intup" interface_weight="2.0"/>
+  </TASKOPERATIONS>
+  <FILTERS>
+    <BuriedUnsatHbonds name="ligbuns" report_bb_heavy_atom_unsats="true" report_sc_heavy_atom_unsats="true" residue_selector="chX" scorefxn="beta" cutoff="0" residue_surface_cutoff="20.0" ignore_surface_res="true" confidence="0.0"/>
+    <BuriedUnsatHbonds2 name="buns2interface" jump_number="1" generous_hbonds="1" scorefxn="beta" cutoff="0" confidence="0.0"/>
+    <!-- <OversaturatedHbondAcceptorFilter name="oversat" scorefxn="beta" acceptor_selector="chX" max_allowed_oversaturated="0" consider_mainchain_only="false" confidence="0.0"/> -->
+    <HbondsToResidue name="hbtolig" scorefxn="beta" partners="0" backbone="true" residue="1X" confidence="0.0"/>
+    <LigInterfaceEnergy name="liginterface" scorefxn="beta" include_cstE="1" confidence="0.0"/>
+  </FILTERS>
+  <SIMPLE_METRICS>
+    <SasaMetric name="lig_hphobe_sasa" residue_selector="chX" sasa_metric_mode="hydrophobic_sasa" />
+  </SIMPLE_METRICS>
+  <MOVERS>
+    <AddOrRemoveMatchCsts cst_instruction="add_new" name="add_match_constraints"/>
+    <CoupledMovesProtocol name="cm" score_fxn_="beta" task_operations="resfile,ifc,intup"/>
+    <RunSimpleMetrics name="run_metrics1" metrics="lig_hphobe_sasa" prefix="lighphobe"/>
+    <AddOrRemoveMatchCsts cst_instruction="remove" name="remove_match_constraints"/>
+    <MinMover name="min" tolerance="0.001" chi="True" bb="True" scorefxn="beta" >
+    </MinMover>
+  </MOVERS>
+  <PROTOCOLS>
+    <Add mover_name="add_match_constraints"/>
+    <Add mover_name="cm"/>
+    <Add mover_name="remove_match_constraints"/>
+    <Add mover="min"/>
+    <Add filter_name="buns2interface"/>
+    <!-- <Add filter_name="oversat"/> -->
+    <Add filter_name="ligbuns"/>
+    <Add filter_name="hbtolig"/>
+    <Add filter_name="liginterface"/>
+    <Add mover_name="run_metrics1"/>
+  </PROTOCOLS>
+  <OUTPUT/>
+</ROSETTASCRIPTS>

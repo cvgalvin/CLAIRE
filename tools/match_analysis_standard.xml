@@ -1,0 +1,21 @@
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+    <ScoreFunction name="beta" weights="ref2015"/>
+  </SCOREFXNS>
+  <RESIDUE_SELECTORS>
+    <Chain name="chX" chains="X"/>
+  </RESIDUE_SELECTORS>
+  <TASKOPERATIONS>
+  </TASKOPERATIONS>
+  <FILTERS>
+    <DSasa name="dsasa" confidence="0.0"/>
+  </FILTERS>
+  <SIMPLE_METRICS>
+  </SIMPLE_METRICS>
+  <MOVERS>
+  </MOVERS>
+  <PROTOCOLS>
+    <Add filter_name="dsasa"/>
+  </PROTOCOLS>
+  <OUTPUT/>
+</ROSETTASCRIPTS>

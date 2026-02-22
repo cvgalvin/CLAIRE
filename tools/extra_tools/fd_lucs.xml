@@ -1,0 +1,50 @@
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+    <ScoreFunction name="beta" weights="beta_nov16"/>
+    <!-- <ScoreFunction name="sfxn_design" weights="ref2015" >
+        <Reweight scoretype="approximate_buried_unsat_penalty" weight="5" />
+        <Set approximate_buried_unsat_penalty_burial_probe_radius="2.3" />
+        <Set approximate_buried_unsat_penalty_burial_atomic_depth="4.0" />
+        <Set approximate_buried_unsat_penalty_hbond_energy_threshold="-0.5" />
+    </ScoreFunction> -->
+  </SCOREFXNS>
+  <RESIDUE_SELECTORS>
+  </RESIDUE_SELECTORS>
+  <TASKOPERATIONS>
+    <ReadResfile name="resfile"/>
+    <InitializeFromCommandline name="ifc"/>
+  </TASKOPERATIONS>
+  <FILTERS>
+    <ResidueCount name="nres" />
+    <AtomicContactCount name="acc" confidence="0.0"/>
+    <PackStat name="packstat" threshold="0.0" confidence="0.0"/>
+    <TotalSasa name="total_sasa" threshold="0.0" confidence="0.0" />
+    <TotalSasa name="hphobe_sasa" threshold="0.0" hydrophobic="True" confidence="0.0"/>
+    <OversaturatedHbondAcceptorFilter name="oversat" scorefxn="beta" max_allowed_oversaturated="10" consider_mainchain_only="false" confidence="0.0"/>
+    <CavityVolume name="cav" confidence="0.0"/>
+    <BuriedSurfaceArea name="bsa" select_only_FAMILYVW="True" filter_out_low="False" confidence="0.0"/>
+    <ExposedHydrophobics name="exphyd" confidence="0.0"/>
+    <BuriedUnsatHbonds name="buns_bb_heavy" report_bb_heavy_atom_unsats="true" scorefxn="beta" cutoff="10" residue_surface_cutoff="20.0" ignore_surface_res="true" confidence="0.0"/>
+    <BuriedUnsatHbonds name="buns_sc_heavy" report_sc_heavy_atom_unsats="true" scorefxn="beta" cutoff="10" residue_surface_cutoff="20.0" ignore_surface_res="true" confidence="0.0"/>
+  </FILTERS>
+  <SIMPLE_METRICS>
+  </SIMPLE_METRICS>
+  <MOVERS>
+    <FastRelax name="fd" scorefxn="beta" disable_design="False" task_operations="resfile,ifc" repeats="3"/>
+  </MOVERS>
+  <PROTOCOLS>
+    <Add mover_name="fd"/>
+    <Add filter_name="cav"/>
+    <Add filter_name="acc"/>
+    <Add filter_name="bsa"/>
+    <Add filter_name="total_sasa"/>
+    <Add filter_name="hphobe_sasa"/>
+    <Add filter_name="nres"/>
+    <Add filter_name="exphyd"/>
+    <Add filter_name="buns_bb_heavy"/>
+    <Add filter_name="buns_sc_heavy"/>
+    <Add filter_name="packstat"/>
+    <Add filter_name="oversat"/>
+  </PROTOCOLS>
+  <OUTPUT/>
+</ROSETTASCRIPTS>

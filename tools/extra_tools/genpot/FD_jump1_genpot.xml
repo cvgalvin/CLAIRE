@@ -1,0 +1,53 @@
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+    <ScoreFunction name="beta" weights="beta_genpot"/>
+  </SCOREFXNS>
+  <RESIDUE_SELECTORS>
+    <Chain name="chX" chains="X"/>
+    <Not name="all_but_chX">
+        <Chain chains="X"/>
+    </Not>
+    <Neighborhood name="chX_neighbors" distance="8.0">
+      <Chain chains="X"/>
+    </Neighborhood>
+  </RESIDUE_SELECTORS>
+  <TASKOPERATIONS>
+    <ProteinLigandInterfaceUpweighter name="intup" interface_weight="2.0"/>
+    <ReadResfile name="resfile"/>
+    <InitializeFromCommandline name="ifc"/>
+  </TASKOPERATIONS>
+  <FILTERS>
+    <ResidueCount name="nres" />
+    <ResidueCount name="nres_bs" residue_selector="chX_neighbors" />
+    <BuriedUnsatHbonds2 name="buns2interface" jump_number="1" generous_hbonds="1" scorefxn="beta" cutoff="0" confidence="0.0"/>
+    <CavityVolume name="cav" confidence="0.0"/>
+    <ExposedHydrophobics name="exphyd" confidence="0.0"/>
+    <HbondsToResidue name="hbtolig" scorefxn="beta" partners="0" backbone="true" residue="1X" confidence="0.0"/>
+    <OversaturatedHbondAcceptorFilter name="oversat" scorefxn="beta" acceptor_selector="chX" max_allowed_oversaturated="0" consider_mainchain_only="false" confidence="0.0"/>
+  </FILTERS>
+  <SIMPLE_METRICS>
+    <SasaMetric name="lig_hphobe_sasa" residue_selector="chX" sasa_metric_mode="hydrophobic_sasa" />
+  </SIMPLE_METRICS>
+  <MOVERS>
+    <AddOrRemoveMatchCsts cst_instruction="add_new" name="add_match_constraints"/>
+    <FastRelax name="fd" scorefxn="beta" task_operations="resfile,ifc,intup"/>
+    <RunSimpleMetrics name="run_metrics1" metrics="lig_hphobe_sasa" prefix="lighphobe"/>
+    <AddOrRemoveMatchCsts cst_instruction="remove" name="remove_match_constraints"/>
+    <FastRelax name="fr" scorefxn="beta"/>
+  </MOVERS>
+  <PROTOCOLS>
+    <Add mover_name="add_match_constraints"/>
+    <Add mover_name="fd"/>
+    <Add mover_name="remove_match_constraints"/>
+    <Add mover_name="fr"/>
+    <Add filter_name="buns2interface"/>
+    <Add filter_name="oversat"/>
+    <Add filter_name="hbtolig"/>
+    <Add filter_name="exphyd"/>
+    <Add filter_name="cav"/>
+    <Add filter_name="nres"/>
+    <Add filter_name="nres_bs"/>
+    <Add mover_name="run_metrics1"/>
+  </PROTOCOLS>
+  <OUTPUT/>
+</ROSETTASCRIPTS>
