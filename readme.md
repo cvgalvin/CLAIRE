@@ -63,7 +63,8 @@ Overview of Workflow
 15.score all metrics repeat - final filtering of designs
 
 
-##Description of Contents
+Description of Contents
+---------------
 
 #db contains lists for matching user defined ligand substructures with existing ligands in pdb, then finding pdb id codes that those ligands are a part of to scrape contacts from 
 
