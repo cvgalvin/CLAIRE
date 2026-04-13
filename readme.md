@@ -1,5 +1,6 @@
 Dependencies 
 ---------------
+
 prody
 babel
 openbabel
@@ -19,6 +20,7 @@ pyrosetta
 
 Overview of Workflow
 ---------------
+
 1.prepare target model/params
 2.define fragments/perform fragment search
 3.scrape pdb 4 contacts + filter 
