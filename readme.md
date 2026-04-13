@@ -1,4 +1,4 @@
-Necessart Software
+Necessary Software
 ---------------
 prody
 
