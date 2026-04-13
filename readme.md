@@ -13,7 +13,10 @@ pandas
 amber antechamber
 proteinMPNN 
 colabfold
----------------
+rosetta 
+pyrosetta
+
+
 Overview of Workflow
 ---------------
 1.prepare target model/params
