@@ -1,21 +1,32 @@
-Dependencies 
+Necessart Software
 ---------------
-
 prody
+
 babel
+
 openbabel
+
 numpy
+
 scipy
+
 io
+
 biopython
+
 shutil
+
 collections
+
 pandas
+
 amber antechamber
+
 proteinMPNN 
+
 colabfold
-rosetta 
-pyrosetta
+
+rosetta/pyrosetta
 
 
 Overview of Workflow
@@ -52,7 +63,7 @@ and options used for submitting rosetta applications and xml scripts
 
 	-genpot folder contains params generation, enzyme design application + 	metric analysis, fastdesign (with and without 3bop), and coupledmoves 		application when using rosetta generic potential scorefunction 
 
-	-other_metric_eval contains rosetta xml for design evaluation for 		different cases 
+	-other_metric_eval contains rosetta xml for design evaluation for different cases 
 
 	-cm_standard_jump1.xml = rosetta xml for running coupledmoves protocol 	with standard all atom scorefunction
 
