@@ -1,3 +1,39 @@
+Dependencies 
+---------------
+prody
+babel
+openbabel
+numpy
+scipy
+io
+biopython
+shutil
+collections
+pandas
+amber antechamber
+proteinMPNN 
+colabfold
+---------------
+Overview of Workflow
+---------------
+1.prepare target model/params
+2.define fragments/perform fragment search
+3.scrape pdb 4 contacts + filter 
+4.cluster contacts
+5.generate motifs
+6.match
+7.filter matches for ligand burial(+residue preferences)
+8.enzyme design application on matches
+9.hbond refinement
+10.fast scoring binding metrics (eg hbonds+burial)
+11.additional scoring binding metrics (preorganization, molecular contact surface, etc.)
+12.proteinmpnn on non binding site positions
+13.fastdesign with mpnn seq profile - score stability metrics 
+14.colabfold
+15.score all metrics repeat - final filtering of designs
+
+##Description of Contents
+
 #db contains lists for matching user defined ligand substructures with existing ligands in pdb, then finding pdb id codes that those ligands are a part of to scrape contacts from 
 
 #workflow.py script includes information on dependencies, general workflow, some example code 
