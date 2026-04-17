@@ -1,66 +1,65 @@
-Necessary Software
+Combinatorial Assembly with Integrated REfinement for de novo Design of Small Molecule Binding Proteins
 ---------------
+This repository contains code necessary to recapitulate the workflow described in 
+	
+	[Connor V. Galvin, Amy B. Guo, Maple N. Chen, Isabella L. Alfonso, Dominic Grisingher, Simon Kretschmer, Divya Kranthi, Mark J. S. Kelly, Tanja Kortemme. A Hybrid Physics-Deep Learning Framework for Combinatorial De Novo Design of Small-Molecule Binding Proteins](https://doi.org/10.64898/2026.04.12.717919)
+
+where it was successfully applied to design binders for two target molecules, achieving high experimental success rates in both cases (4/26 tested designs bound target), sufficient to bypass the need for large-scale experimental screening. 
+
+Provided are scripts and instructions to perform motif library generation for an arbitrary small molecule target, along with matching, optimization, and evaluation of resultant designs. Excluded, however, is the generation of a protein scaffold library against which to screen binding motifs, for which the [LUCS](https://github.com/Kortemme-Lab/loop_helix_loop_reshaping) software was used in the referenced publication. The 1,816 LUCS-generated NTF2 fold proteins used therein is available as [supplementary data](https://doi.org/10.5061/dryad.7pvmcvf8c), under "LUCS_NTF2_scaffold_library".
+
+
+Necessary Software/Modules for 1:1 Execution of Workflow
+---------------
+
 prody
-
 babel
-
 openbabel
-
 numpy
-
 scipy
-
 io
-
 biopython
-
 shutil
-
 collections
-
 pandas
-
 amber antechamber
-
 proteinMPNN 
-
 colabfold
-
 rosetta/pyrosetta
 
 
 Overview of Workflow
 ---------------
 
-1.prepare target model/params
+1. Prepare target model/params
 
-2.define fragments/perform fragment search
+2. Define fragments/perform fragment search
 
-3.scrape pdb 4 contacts + filter 
+3. Scrape pdb 4 contacts + filter 
 
-4.cluster contacts
+4. Cluster contacts
 
-5.generate motifs
+5. Generate motifs
 
-6.match
+6. RosettaMatch
 
-7.filter matches for ligand burial(+residue preferences)
+7. Filter matches for ligand burial(+residue preferences)
 
-8.enzyme design application on matches
+8. EnzymeDesign application on match binding sites
 
-9.hbond refinement
+9. HBond Refinement
 
-10.fast scoring binding metrics (eg hbonds+burial)
+10. Fast scoring - binding metrics (eg hbonds+burial)
 
-11.additional scoring binding metrics (preorganization, molecular contact surface, etc.)
+11. Additional scoring binding metrics (preorganization, molecular contact surface, etc.)
 
-12.proteinmpnn on non binding site positions
+12. ProteinMPNN on non binding site positions
 
-13.fastdesign with mpnn seq profile - score stability metrics 
+13. Rosetta FastDesign with PMPNN sequence profile + score stability metrics 
 
-14.colabfold
+14. Colabfold
 
-15.score all metrics repeat - final filtering of designs
+15. Score all metrics + final filtering of designs
 
 
 Description of Contents
@@ -70,11 +69,11 @@ Description of Contents
 
 #workflow.py script includes information on general workflow with example code and flags used for submitting rosetta applications and xml scripts 
 
-#main contains the code for the primary workflow of scraping pdb for protein-ligand contacts with user defined ligand substructures, transforming relative to target ligand, filtering for quality+redundancy, and clustering the resultant interaction pools 
+#main contains the code for the motif library generation, ie scraping pdb for protein-ligand contacts with user defined ligand substructures, transforming relative to target ligand, filtering for quality+redundancy, and clustering the resultant interaction pools 
 
 #tools contains most useful design evaluation xmls and refinement scripts (hbrefine.py, fd_mpnn.xml)
 
-#extra_tools contains additional scripts that may be useful 
+#extra_tools contains additional scripts that may be useful, eg
 
 	-genpot folder contains params generation, enzyme design application + 	metric analysis, fastdesign (with and without 3bop), and coupledmoves 		application when using rosetta generic potential scorefunction 
 
