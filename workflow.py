@@ -166,7 +166,7 @@ USES LOCAL COPY OF PDBREDO DATABASE, MUST MANUALLY CHANGE PATH IN SCRIPT TO LOCA
 '''
 time ipython main/extract_align_contacts.py  pdb_search_results_json
 '''
-however, if there are many outputs, that we want to split for distributed computing (eg wynton ucsf cluster)
+however, if there are many outputs, that we want to split for distributed computing 
 we can first use the process_fragment_search.py script
 this will split the json file into multiple outputs 
 the final block in the script is for outputting shellfile (run_align.sh) 
@@ -572,9 +572,6 @@ plt.savefig('scorevspop.pdf')
 plt.clf()
 
 '''
-scp cgalvin@log2.wynton.ucsf.edu:/wynton/home/kortemme/cgalvin/38e_simon_12-07-2023/residue_contact_fuzzballs/38e_Fragment_1_residue_contacts/scorevspop.pdf ~/desktop/scorevspop.pdf
-
-
 and we can see that score does not correlate with frequency, so we definitely want to 
 bias motif generation towards most highly populated clusters
 '''
@@ -1079,7 +1076,7 @@ accepted_clusts=[]
 ac=0
 pdboutpaths=[]
 clustnames_blocks=[]
-for clust,freq in nps[:50]: #################################################################### the number here is the top X most populated clusters you want to include 
+for clust,freq in nps[:50]: ####################### the number here is the top X most populated clusters you want to include 
     p = Pose()
     generate_nonstandard_residue_set(p,ligparams)
     pose_from_file(p, clust)
@@ -1623,7 +1620,7 @@ for d in f1:
 '''
 we use  tools/match_resfile2.py script 
 
-assuumes match has typical naming scheme UM_X_D45N84L97
+assuumes matches have typical naming scheme UM_X_D45N84L97
 
 takes command line arguments INPUTMATCH.PDB TARGETROSETTAPARAMS.PARAMS DISTANCE ISGENPOT
 distance is the distance from ligand that design is allowed (ie if 5.0, all residues within 5 angstroms of ligand designable)
@@ -1714,7 +1711,7 @@ time python tools/hbrefine.py paramspath.params pdbpath.pdb outputdirectorypath
 scoring designs
 ~/BSFF/tools/edanalysis_std_sfn.xml script 
 
-can uuse extratools/edanalysis.xml with genpot
+can use extratools/edanalysis.xml with genpot
 
 calculates fast metrics that we can run relatively quickly on a lot of designs (>1 million if needed)
 
@@ -1740,7 +1737,7 @@ that take longer per structure (around an hour per input is typical)
 
 tools/ligbinderanalysis_jump1.xml script
 
-this requires adding a few options 
+this requires adding a few options/flags 
 '''
 
 'main/source/bin/rosetta_scripts.default.linuxgccrelease -in:file:s='+matchpath+' -parser:protocol tools/ligbinderanalysis_jump1.xml -in:file::extra_res_fa '+params+' -ignore_unrecognized_res -load_PDB_components False -scorefile_format json -out:file:score_only '+scorefile_name+' -run:nblist_autoupdate -parser:view -jd2:ntrials=1 -packing:no_optH=false -packing:flip_HNQ -packing:extrachi_cutoff=1 -packing:use_input_sc -packing:linmem_ig=10 -packing:ex1 -packing:ex2 -corrections:score:no_his_his_pairE -corrections:score:lj_hbond_hdis=1.75 -corrections:score:lj_hbond_OH_donor_dis=2.6 -corrections:beta_nov16 -enzdes:bb_min_allowed_dev=0.05 -enzdes:detect_design_interface -enzdes:cut1=4 -enzdes:cut2=6 -enzdes:cut3=8 -enzdes:cut4=10')
@@ -1951,7 +1948,7 @@ json.dump(tfdata,open(ofjsonname,'w'))
 
 
 '''
-rosetta
+Rosetta
 FASTDESIGN with mpnn sequence profile
 some filters but no ddg/boltz
 
@@ -1965,8 +1962,6 @@ some filters but no ddg/boltz
          '-resfile','${tasks[$SGE_TASK_ID]}.resfile',  ##
          '-ex1','-ex2','-extrachi_cutoff','0','-use_input_sc',
          '-out:nstruct',ndesignseachmatch,
-         # '-score:set_weights','hbond_bb_sc','2.0',
-         # '-score:set_weights','hbond_sc','2.0',
          '-beta_nov16',
          '-load_PDB_components','False',
          '-out:path:all',outputdirectory,
@@ -2255,5 +2250,4 @@ print(len(aplddts))
 
 '''
 MIGHT THEN WANT TO REPEAT SCORING ON AF2 FILTERED OUTPUTS TO ENSURE RETENTION OF KEY FEATURES 
-
 '''
