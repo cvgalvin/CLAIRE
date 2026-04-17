@@ -8,24 +8,25 @@ where it was successfully applied to design binders for two target molecules, ac
 
 Provided are scripts and instructions to perform motif library generation for an arbitrary small molecule target, along with matching, optimization, and evaluation of resultant designs. Excluded, however, is the generation of a protein scaffold library against which to screen binding motifs, for which the [LUCS](https://github.com/Kortemme-Lab/loop_helix_loop_reshaping) software was used in the referenced publication. The 1,816 LUCS-generated NTF2 fold proteins used therein is available as [supplementary data](https://doi.org/10.5061/dryad.7pvmcvf8c), under "LUCS_NTF2_scaffold_library".
 
+'workflow.py' provides a complete walkthrough of the workflow, with example terminal commands for executing every step as well as descriptions of inputs/outputs for each. Many of the scripts were produced according to the system specifications at the time of their application, and thus reference paths and distributed computing options that individual users must change to align with their system, but note is made where this is the case and the relevant lines are specified. 
 
 Necessary Software/Modules for 1:1 Execution of Workflow
 ---------------
 
-prody
-babel
-openbabel
-numpy
-scipy
-io
-biopython
-shutil
-collections
-pandas
-amber antechamber
-proteinMPNN 
-colabfold
-rosetta/pyrosetta
+prody <br />
+babel <br />
+openbabel <br />
+numpy <br />
+scipy <br />
+io <br />
+biopython <br />
+shutil <br />
+collections <br />
+pandas <br />
+amber antechamber <br />
+proteinMPNN <br />
+colabfold <br />
+Rosetta/pyrosetta <br />
 
 
 Overview of Workflow
