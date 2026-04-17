@@ -1,6 +1,6 @@
 Combinatorial Assembly with Integrated REfinement for de novo Design of Small Molecule Binding Proteins
 ---------------
-This repository contains code necessary to recapitulate the [workflow described in](https://doi.org/10.64898/2026.04.12.717919) 
+This repository contains code necessary to recapitulate the workflow described in [this paper:](https://doi.org/10.64898/2026.04.12.717919) 
 	
 	Connor V. Galvin, Amy B. Guo, Maple N. Chen, Isabella L. Alfonso, Dominic Grisingher, Simon Kretschmer, Divya Kranthi, Mark J. S. Kelly, Tanja Kortemme. A Hybrid Physics-Deep Learning Framework for Combinatorial De Novo Design of Small-Molecule Binding Proteins
 
