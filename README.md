@@ -155,15 +155,7 @@ Thresholds and Rosetta flags are the original values, all editable in `claire.ya
 repository (contact extraction/filtering, clustering, HBRefine, resfile generation, conformer generation) is vendored
 in `claire/legacy/` with only path handling and pandas 2 compatibility changed; logic that lived inline in
 `workflow.py` (motif assembly, H-bond cluster screen, score filtering, AF2 analysis) is ported into `claire/steps/`.
-Changes worth knowing:
 
-* **ProteinMPNN design region**: the motif residues and all residues within `mpnn.binding_site_cutoff` (10 Å) of
-  the ligand are fixed; ProteinMPNN redesigns everything outside the binding-site neighborhood.
-* **MPNN profile resfiles** allow, at each designable position, the residues sampled by ProteinMPNN; binding-site
-  positions are NATAA.
-* **Final selection** computes Ca RMSD with a numpy superposition instead of PyRosetta.
-* **HBRefine outputs** carried forward are designs whose ligand polar atoms were already satisfied (`*_unrefined.pdb`)
-  and designs HBRefine fixed (`*_fixed.pdb`); designs it could not fix (`_unsats`, `_ubp`, `_bothproblems`) are dropped.
 
 ## Module map (original → package)
 
