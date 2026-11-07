@@ -1,0 +1,154 @@
+# CLAIRE project configuration.
+# Relative paths are resolved against the directory containing this file.
+# Each step reads its inputs from the previous step's folder, so you normally only edit this file once.
+
+ligand:
+  name: LIG                    # residue name used in the Rosetta params file (3 characters)
+  sdf: inputs/ligand.sdf       # target model, protonated for pH 7.4 and minimized (e.g. MMFF94)
+  conformers: 1                # >1: generate this many RDKit conformers for the params file
+  conformer_rms_prune: 0.1
+
+# Ligand substructures used for the PDB contact search.
+# Atom names refer to 01_target/<LIG>_0001.pdb (run `claire fragments --list-atoms` to print them).
+# Put hydrogens where the substructure should terminate (e.g. on a carboxylate O, so esters are not matched).
+fragments: []
+# One entry per fragment. Each fragment is searched separately, so keep fragments small (a ring, a functional group).
+#  - name: ringA
+#    atoms: [C1, C2, C3, C4, C5, C10]
+#  - name: acetyl
+#    atoms: [C17, C20, O20, C21]
+# Shorthand: fragments: [[C1, C2, C3, C4, C5, C10], [C17, C20, O20, C21]]   (a flat list = a single fragment)
+
+# Fragments whose clusters are screened for genuine hydrogen bonds (PyRosetta HBondSet);
+# only H-bonding clusters with at least motifs.min_hbond_cluster_population members are kept.
+hbond_fragments: []
+
+# Ligand polar atoms that receive an explicit, idealized hydrogen-bond constraint in every motif.
+# atoms: [polar atom, bonded atom, next atom] (defines angle_A and torsion_A)
+polar_atoms: []
+#  - atoms: [O2, C20, C19]
+#    donor: false              # true if the ligand atom donates the hydrogen bond
+#    hybridization: sp2        # sp2 | sp3 | sp
+#    charged_residues: true    # allow Lys/Arg partners
+
+scaffolds:
+  dir: inputs/scaffolds        # scaffold PDBs; <name>.pos lists matcher positions (auto-generated if absent)
+  auto_pos_cb_cutoff: 10.0     # for auto .pos: residues whose CB points into the core within this distance (A)
+
+sources:
+  structures: pdb-redo         # pdb-redo | rcsb
+  local_pdb_redo: null         # optional local PDB-REDO mirror (layout: <mid2>/<id>/<id>_final.pdb)
+  fallback_to_rcsb: true       # use the RCSB deposited model when an entry is not in PDB-REDO
+  ligand_search: rcsb          # rcsb (online, up to date) | bundled (original 2022 database, for exact reproduction)
+  bundled_db: null             # path to the unzipped original db/ folder (only for ligand_search: bundled)
+  download_workers: 8
+
+tools:
+  rosetta_bin: null            # .../rosetta/main/source/bin (or set $ROSETTA_BIN)
+  rosetta_suffix: auto         # e.g. .linuxgccrelease or .default.linuxgccrelease; auto-detected
+  molfile_to_params: null      # path to molfile_to_params.py; auto-detected from rosetta_bin
+  proteinmpnn_dir: null        # path to a ProteinMPNN or LigandMPNN checkout (auto-detected)
+  colabfold_batch: colabfold_batch
+  obabel: obabel
+  python: python               # interpreter used for vendored scripts and ProteinMPNN
+
+compute:
+  backend: local               # local | slurm | sge
+  workers: 4                   # parallel tasks for the local backend
+  submit: false                # slurm/sge: submit automatically (otherwise only write the job script)
+  slurm: {partition: null, time: "24:00:00", mem: 8G, extra: ""}
+  sge: {mem: 8G, time: "24:00:00", extra: ""}
+  setup: ""                    # shell lines run before each task on a cluster (e.g. conda activate claire)
+
+motifs:
+  n_polar_motifs: 100
+  allowed_problematic_motifs: 15   # motifs containing one Lys/Arg/Gln/Asn partner
+  max_attempts: 10000
+  n_top_clusters: 50               # most populated nonpolar clusters considered
+  nonpolar_residues: [THR, VAL, LEU, ILE, PHE, TYR, TRP, MET]
+  nonpolar_fragments: []           # fragments supplying packing contacts (default: all not in hbond_fragments)
+  min_hbond_cluster_population: 15
+  single_contact_threshold: -2.0   # REU, best residue-ligand contact in a cluster
+  double_contact_threshold: -5.0   # REU, pair of nonpolar contacts with the ligand
+  hybrids: {1: 1, 2: 2}            # {nonpolar contacts per motif (1 or 2): hybrid motifs made per polar motif}
+  # Motif size = number of polar_atoms entries (one H-bond residue each; list an atom twice for two partners)
+  #              + number of nonpolar contacts (the keys above). The paper used 3 H-bonds + 1 nonpolar = 4 residues.
+  seed: 1
+  # Matcher geometry. Empty = the workflow.py values (which differ by H-bond case; see claire/steps/motifs.py).
+  # Any key set here replaces the default in every case; tolerances of 360 (free torsions) stay free.
+  # Keys: distance_tolerance, angle_A_tolerance, angle_B_tolerance, torsion_A_tolerance, torsion_AB_tolerance,
+  #       torsion_B_tolerance (A or degrees), distance_samples, angle_samples, torsion_samples (points sampled on
+  #       each side of the ideal value; 0 = ideal value only).
+  constraints:
+    hbond: {}          # e.g. {distance_tolerance: 0.4, torsion_samples: 3}
+    nonpolar: {}
+  # Used by `claire motifs --fast`: wide tolerances, ideal values only (fast matching, fewer matches).
+  fast_preset:
+    hbond:    {distance_tolerance: 0.5, angle_A_tolerance: 20, angle_B_tolerance: 20, torsion_A_tolerance: 30,
+               torsion_AB_tolerance: 30, torsion_B_tolerance: 30, distance_samples: 0, angle_samples: 0, torsion_samples: 0}
+    nonpolar: {distance_tolerance: 0.5, angle_A_tolerance: 20, angle_B_tolerance: 20, torsion_A_tolerance: 30,
+               torsion_AB_tolerance: 30, torsion_B_tolerance: 30, distance_samples: 0, angle_samples: 0, torsion_samples: 0}
+
+match:
+  motif_sets: [1np, 2np]
+
+burial:
+  dsasa_min: 0.7
+
+enzdes:
+  design_shell: 5.0            # A from ligand
+  nstruct: 1
+  filter: true                 # apply filters.enzdes before HBRefine
+
+# Score filters: [metric, op, threshold], op is "<=" or ">="
+filters:
+  enzdes:                      # after binding-site design, before HBRefine (Methods; fast metrics)
+    - [bsE_per_res, "<=", -2.0]
+    - [lig_hphobe_sasa, "<=", 40.0]
+    - [ligoversat, "<=", 0]
+  binding:
+    - [buns2interface, "<=", 0]
+    - [boltz, "<=", -0.3]
+    - [ddg, "<=", -20.0]
+    - [contact_molsurf, ">=", 150]
+    - [hbtolig, ">=", 2.0]
+    - [shape_comp, ">=", 0.65]
+    - [lig_hphobe_sasa, "<=", 20.0]
+    - [ligoversat, "<=", 0]
+  fastdesign:
+    - [buns2interface, "<=", 1.0]
+    - [contact_molsurf, ">=", 165]
+    - [hbtolig, ">=", 2.0]
+    - [shape_comp, ">=", 0.65]
+    - [lig_hphobe_sasa, "<=", 40.0]
+    - [packstat, ">=", 0.6]
+    - [buns_bb_heavy, "<=", 5]
+    - [buns_sc_heavy, "<=", 1]
+    - [ligoversat, "<=", 0]
+    - [oversat, "<=", 0]
+    - [exphyd, "<=", 1200]
+    - [cav, "<=", 140]
+
+score:
+  full_metrics: true           # also run ligbinderanalysis_jump1.xml (slower, ~1 h per design)
+
+mpnn:
+  model_type: protein_mpnn     # protein_mpnn (as in the paper) | ligand_mpnn (ligand-aware; needs LigandMPNN)
+  num_seq: 300
+  temperature: 0.15
+  binding_site_cutoff: 10.0    # A; residues within this distance of the ligand, plus motif residues, stay fixed;
+                               # all other positions are redesigned by ProteinMPNN (as in the original workflow)
+  min_dsasa: 0.8
+
+fastdesign:
+  nstruct: 10
+
+predict:
+  msa_mode: single_sequence
+  num_models: 5
+  num_recycles: 12
+  model_order: "3,4,5,1,2"
+
+final:
+  plddt_min: 88.0
+  ca_rmsd_max: 1.5

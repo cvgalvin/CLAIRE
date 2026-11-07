@@ -1,0 +1,39 @@
+CLAIRE Non-Commercial License
+
+Copyright (c) 2026 The Regents of the University of California. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person or organization obtaining a copy of this software and
+associated documentation files (the "Software"), to use, copy, modify, merge and distribute the Software, and to
+permit persons to whom the Software is furnished to do so, solely for Non-Commercial Purposes, subject to the
+following conditions:
+
+1. Non-Commercial Purposes. "Non-Commercial Purposes" means academic research, teaching, and other uses by
+   non-profit, academic, or government institutions, or by individuals, that are not primarily intended for or
+   directed towards commercial advantage or monetary compensation. Commercial Purposes include, without limitation:
+   (a) use of the Software, or of outputs generated with it, in the course of developing, manufacturing, selling or
+   offering commercial products or services; (b) use by or on behalf of a for-profit entity; (c) providing the
+   Software, or services based on it, to third parties for a fee; and (d) incorporating the Software into a
+   commercial product.
+
+2. Attribution. The above copyright notice, this permission notice and the following citation must be included in
+   all copies or substantial portions of the Software, and publications describing work that used the Software
+   should cite:
+   Galvin CV, Guo AB, Chen MN, Alfonso IL, Grisingher D, Kretschmer S, Kranthi D, Kelly MJS, Kortemme T.
+   A Hybrid Physics–Deep Learning Framework for Combinatorial De Novo Design of Small-Molecule Binding Proteins.
+   bioRxiv (2026). https://doi.org/10.64898/2026.04.12.717919
+
+3. Modifications. Distributed modified versions must be clearly marked as modified and remain subject to this
+   license.
+
+4. Third-party software. The Software calls, but does not include or license, third-party programs (including
+   Rosetta, PyRosetta, ProteinMPNN, ColabFold and Open Babel). Each is governed by its own license, which users must
+   obtain and comply with separately.
+
+5. Commercial licensing. Use for Commercial Purposes requires a separate written license. Contact UCSF Innovation
+   Ventures (https://innovation.ucsf.edu) or the corresponding authors.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS,
+THE REGENTS OF THE UNIVERSITY OF CALIFORNIA OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.

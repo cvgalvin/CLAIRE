@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claire-design"
+version = "0.1.0"
+description = "CLAIRE: combinatorial assembly of statistically enriched binding motifs into de novo scaffolds, with integrated refinement"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [{name = "Connor V. Galvin"}, {name = "Tanja Kortemme"}]
+requires-python = ">=3.9"
+dependencies = ["numpy", "scipy", "pandas", "matplotlib", "pyyaml", "rdkit", "prody", "biopython"]
+
+[project.scripts]
+claire = "claire.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["claire*"]
+
+[tool.setuptools.package-data]
+"claire.data" = ["*.yaml", "xml/*.xml", "xml/extra/*.xml"]
