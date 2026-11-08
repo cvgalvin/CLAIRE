@@ -12,7 +12,8 @@ ligand:
 # Atom names refer to 01_target/<LIG>_0001.pdb (run `claire fragments --list-atoms` to print them).
 # Put hydrogens where the substructure should terminate (e.g. on a carboxylate O, so esters are not matched).
 fragments: []
-# One entry per fragment. Each fragment is searched separately, so keep fragments small (a ring, a functional group).
+# `fragments: auto` defines them from the ligand's chemistry (H-bond groups with context, aromatic systems);
+# preview with `claire fragments --auto`. One entry per fragment. Each fragment is searched separately, so keep fragments small (a ring, a functional group).
 #  - name: ringA
 #    atoms: [C1, C2, C3, C4, C5, C10]
 #  - name: acetyl
@@ -21,13 +22,14 @@ fragments: []
 
 # Fragments whose clusters are screened for genuine hydrogen bonds (PyRosetta HBondSet);
 # only H-bonding clusters with at least motifs.min_hbond_cluster_population members are kept.
-hbond_fragments: []
+hbond_fragments: []         # or `auto` (the H-bond groups found by `fragments: auto`)
 
 # Ligand polar atoms that receive an explicit, idealized hydrogen-bond constraint in every motif.
 # atoms: [polar atom, bonded atom, next atom] (defines angle_A and torsion_A)
 polar_atoms: []
-#  - atoms: [O2, C20, C19]
-#    donor: false              # true if the ligand atom donates the hydrogen bond
+#  - atoms: [O2, C20, C19]     # acceptor: [acceptor atom, bonded atom, next atom]
+#    donor: false              # true if the ligand atom donates the hydrogen bond;
+#                              # donors list the polar hydrogen first: [H1, O1, C3]
 #    hybridization: sp2        # sp2 | sp3 | sp
 #    charged_residues: true    # allow Lys/Arg partners
 
@@ -39,9 +41,12 @@ sources:
   structures: pdb-redo         # pdb-redo | rcsb
   local_pdb_redo: null         # optional local PDB-REDO mirror (layout: <mid2>/<id>/<id>_final.pdb)
   fallback_to_rcsb: true       # use the RCSB deposited model when an entry is not in PDB-REDO
-  ligand_search: rcsb          # rcsb (online, up to date) | bundled (original 2022 database, for exact reproduction)
+  ligand_search: ccd           # ccd (current Chemical Component Dictionary, searched locally; default) | rcsb (RCSB search
+                               # API; misses matches where its aromaticity model differs) | bundled (original 2022 database)
   bundled_db: null             # path to the unzipped original db/ folder (only for ligand_search: bundled)
   download_workers: 8
+  max_entries_per_fragment: null   # e.g. 2000: use a random (seeded) subset when a fragment matches more PDB entries
+  subsample_seed: 1
 
 tools:
   rosetta_bin: null            # .../rosetta/main/source/bin (or set $ROSETTA_BIN)
@@ -60,6 +65,13 @@ compute:
   sge: {mem: 8G, time: "24:00:00", extra: ""}
   setup: ""                    # shell lines run before each task on a cluster (e.g. conda activate claire)
 
+cluster:
+  algorithm: fast              # fast (identical clusters, much faster) | original (spatial_cluster.py)
+
+contacts:
+  min_distance_polar: 2.4       # A; contacts closer to the fragment than this (N/O...N/O pairs) are discarded as artefacts
+  min_distance_other: 2.8       # A; same, for any pair involving C or S (well inside van der Waals contact)
+
 motifs:
   n_polar_motifs: 100
   allowed_problematic_motifs: 15   # motifs containing one Lys/Arg/Gln/Asn partner
@@ -74,11 +86,15 @@ motifs:
   # Motif size = number of polar_atoms entries (one H-bond residue each; list an atom twice for two partners)
   #              + number of nonpolar contacts (the keys above). The paper used 3 H-bonds + 1 nonpolar = 4 residues.
   seed: 1
+  hbond_geometry: revised      # revised (default) | original (workflow.py, as in the paper) | statistical (from contacts)
+  statistical:
+    min_observations: 10       # per residue type and ligand polar atom; fewer -> that residue type is not used
   # Matcher geometry. Empty = the workflow.py values (which differ by H-bond case; see claire/steps/motifs.py).
   # Any key set here replaces the default in every case; tolerances of 360 (free torsions) stay free.
   # Keys: distance_tolerance, angle_A_tolerance, angle_B_tolerance, torsion_A_tolerance, torsion_AB_tolerance,
-  #       torsion_B_tolerance (A or degrees), distance_samples, angle_samples, torsion_samples (points sampled on
-  #       each side of the ideal value; 0 = ideal value only).
+  #       torsion_B_tolerance (A or degrees), distance_samples, angle_samples, torsion_samples (all torsions), or
+  #       torsion_A_samples / torsion_AB_samples / torsion_B_samples (points sampled on each side of the ideal value;
+  #       0 = ideal value only).
   constraints:
     hbond: {}          # e.g. {distance_tolerance: 0.4, torsion_samples: 3}
     nonpolar: {}
@@ -128,6 +144,17 @@ filters:
     - [oversat, "<=", 0]
     - [exphyd, "<=", 1200]
     - [cav, "<=", 140]
+
+hbrefine:
+  original: false              # true = the published HBRefine (claire/legacy/hbrefine.py), exactly as used in the paper
+  max_energy_increase: 1.0     # REU; fixed version only: reject any mutation raising the total energy by more than this
+  minimize: true               # minimize the binding site after each H-bond-forming mutation (energy compared with an
+  minimize_backbone: true      # equally minimized starting structure); backbone of binding-site residues included
+  # The fixed version (claire/hbrefine_fixed.py) also: filters binding-site residues correctly, detects ligand polar
+  # atoms of any type, counts only buried ligand polar atoms as unsatisfied, chooses H-bond partners by role
+  # (donors for ligand acceptors, acceptors for ligand donors), accepts a mutation only if it reduces the number of
+  # buried unsatisfied ligand atoms, judges buried polar side chains by whether they H-bond anything, and scores
+  # with beta_nov16.
 
 score:
   full_metrics: true           # also run ligbinderanalysis_jump1.xml (slower, ~1 h per design)

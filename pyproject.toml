@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claire-design"
-version = "0.1.0"
+version = "0.3.3"
 description = "CLAIRE: combinatorial assembly of statistically enriched binding motifs into de novo scaffolds, with integrated refinement"
 readme = "README.md"
 license = {file = "LICENSE"}

@@ -1,4 +1,4 @@
-# Vendored unchanged from the original CLAIRE repository; called by the claire package with explicit arguments.
+# Vendored unchanged from the original CLAIRE repository (the published HBRefine). The fixed version is claire/hbrefine_fixed.py.
 '''
 
 use:

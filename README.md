@@ -89,6 +89,32 @@ On a workstation, `claire run --from match --to final` chains steps.
 * **Polar atoms** (`polar_atoms:`): each ligand polar atom that should receive an explicit hydrogen bond, with two
   bonded atoms defining the geometry, donor/acceptor role and hybridization.
 
+## Automatic fragments
+
+`claire fragments --auto` proposes fragments from the ligand's chemistry (atom names and connectivity from the params
+file; bond orders re-derived from the model's geometry and hydrogens, so errors in the params file's bond orders do not
+matter):
+
+* one fragment per hydrogen-bonding group, with chemical context: the polar atom, heavy atoms within two bonds,
+  double-bond partners of those atoms and any aromatic ring system they touch (a phenol gives the ring plus OH; a
+  conjugated ketone gives the enone); polar atoms on neighbouring atoms (e.g. a vicinal diol) form one group;
+* one fragment per aromatic ring system;
+* suggested `polar_atoms` entries for every acceptor and donor.
+
+Add `--count` to see how many PDB ligands contain each fragment. Use them with `fragments: auto` and
+`hbond_fragments: auto`.
+
+## Statistical hydrogen-bond geometry
+
+`motifs.hbond_geometry: statistical` derives each motif hydrogen bond from the mined contacts: for every ligand polar
+atom, heavy-atom hydrogen bonds (2.5–3.3 Å, complementary roles) are collected from the contacts of the fragments
+containing it, and for each residue type and residue polar atom the six matcher degrees of freedom are fitted (median or
+circular mean; tolerance from the spread; torsions without a clear preference left free). Residue types are sampled in
+proportion to how often they are observed. Combinations with fewer than `motifs.statistical.min_observations` hydrogen
+bonds are not used; a polar atom with none falls back to the revised geometry. The fitted values are written to
+`05_motifs/hbond_statistics.csv` and every observation to `05_motifs/hbond_observations.csv`. Because protein hydrogens
+are absent from the mined structures, these constraints are defined between heavy atoms.
+
 ## Structures and the PDB-REDO requirement
 
 The original scripts needed a full local PDB-REDO mirror. This package instead:
@@ -99,12 +125,35 @@ The original scripts needed a full local PDB-REDO mirror. This package instead:
   (`sources.fallback_to_rcsb`); `03_contacts/structure_sources.json` records where each structure came from;
 * uses a local mirror directly if you have one (`sources.local_pdb_redo`).
 
-Fragment → ligand → entry lookup uses the RCSB search API by default (current PDB). Set
-`sources.ligand_search: bundled` with `sources.bundled_db` pointing to the unzipped `db/` folder from the original
-repository to reproduce the published (2022) searches exactly. Either way, every candidate ligand is re-checked with
+Fragment → ligand → entry lookup searches the current Chemical Component Dictionary locally with RDKit by default
+(downloaded once, ~120 MB, cached), then asks RCSB which entries contain the matching ligands. (The RCSB substructure
+search, `ligand_search: rcsb`, is also available but misses matches whenever its aromaticity model differs from RDKit's.) Set
+`sources.ligand_search: bundled` with `sources.bundled_db` pointing to the unzipped `db/` folder to reproduce the
+published (2022) searches exactly. The original scripts and `db.zip` used in the paper are preserved at the
+[`v0-original`](https://github.com/cvgalvin/CLAIRE/tree/v0-original) tag. Either way, every candidate ligand is re-checked with
 the same RDKit substructure match as the original code.
 
 ## Matching tolerances
+
+### Hydrogen-bond geometry
+
+`motifs.hbond_geometry: revised` (default) uses, for every motif hydrogen bond:
+
+| Parameter | Revised | Original (`workflow.py`, used in the paper) |
+|---|---|---|
+| H···acceptor distance | 2.0 ± 0.3 Å (1.7–2.3 Å) | 1.9 ± 0.5 Å |
+| Acceptor angle, sp2 (B–A···H) | 135 ± 20° | 120 ± 10° |
+| Carbonyl planarity torsion | ±30° | ±20° |
+| Donor-side angle (A···H–D), all hybridizations | 165 ± 15° | 165 ± 15° (sp2), 180 ± 15° (sp3) |
+| Torsion sampling | 2 per side for constrained torsions, 9 for free ones | 5 per side for all three |
+| Partners for ligand donors | Asp, Glu, Gly backbone, Asn, Gln, Ser, Thr, Tyr | Asp, Glu, Gly backbone |
+
+The total number of sampled placements per hydrogen bond is about the same; the revised set redistributes samples
+from the already constrained torsion to the free ones (previously sampled every ~72°). For a ligand donor, list the
+polar hydrogen first in `polar_atoms` (e.g. `[H1, O1, C3]`); the constraint distance is measured from that atom.
+`hbond_geometry: original` reproduces the published constraint files exactly.
+
+### Overrides
 
 Motif constraint files carry, for each interaction, an ideal geometry, a tolerance, and a number of values sampled
 around the ideal by RosettaMatch. By default these are exactly the values from the original `workflow.py` (they differ
@@ -122,6 +171,20 @@ Keys: `distance_tolerance`, `angle_A_tolerance`, `angle_B_tolerance`, `torsion_A
 (tolerance 360) stay free. `claire motifs --fast` applies `motifs.fast_preset` instead (wide tolerances, ideal values
 only), which makes matching much faster but finds fewer matches; useful for test runs. The settings used are recorded
 in `05_motifs/constraint_settings.json`.
+
+## Standalone HBRefine
+
+Run HBRefine on any folder of protein–ligand models, without a project:
+
+```bash
+claire hbrefine-dir LIG.params designs/ hbrefine_out/ --workers 8                 # fixed version
+claire hbrefine-dir LIG.params designs/ hbrefine_out_orig/ --original              # published version
+```
+
+Each design gets a subfolder with its outputs and log, and `hbrefine_summary.csv` lists the outcome
+(already_satisfied, fixed, partially_fixed, no_solution, error), mutations, energy change and buried unsatisfied
+ligand atoms before and after. The fixed version finds the ligand residue automatically; the published version expects
+the ligand to be the last residue, on chain X.
 
 ## Clusters (SLURM / SGE)
 
@@ -156,6 +219,24 @@ repository (contact extraction/filtering, clustering, HBRefine, resfile generati
 in `claire/legacy/` with only path handling and pandas 2 compatibility changed; logic that lived inline in
 `workflow.py` (motif assembly, H-bond cluster screen, score filtering, AF2 analysis) is ported into `claire/steps/`.
 
+* **ProteinMPNN design region**: the motif residues and all residues within `mpnn.binding_site_cutoff` (10 Å) of
+  the ligand are fixed; ProteinMPNN redesigns everything outside the binding-site neighborhood.
+* **MPNN profile resfiles** allow, at each designable position, the residues sampled by ProteinMPNN; binding-site
+  positions are NATAA.
+* **Clustering** uses `claire/cluster_fast.py`, a drop-in replacement for `spatial_cluster.py` that produces
+  byte-identical cluster files: same greedy leader clustering (0.5 Å RMSD over shared side-chain heavy atoms), but
+  with constant-time bookkeeping, vectorized RMSDs and an exact centroid-distance pre-filter (the original scaled
+  roughly cubically with the number of contacts). `cluster: {algorithm: original}` runs the original script.
+* **Final selection** computes Ca RMSD with a numpy superposition instead of PyRosetta.
+* **HBRefine** runs a fixed version by default (`claire/hbrefine_fixed.py`): binding-site residues are filtered
+  correctly; ligand polar atoms of any type are detected; only *buried* ligand polar atoms count as unsatisfied;
+  candidate residues are chosen by role (donors for ligand acceptors, acceptors for ligand donors) and a mutation is
+  accepted only if it reduces the number of buried unsatisfied ligand atoms; buried polar side chains are flagged only
+  if they H-bond nothing (ligand or protein); every accepted mutation may raise the total energy by at most
+  `hbrefine.max_energy_increase` (1 REU); scoring uses beta_nov16. `hbrefine: {original: true}` runs the published
+  script (`claire/legacy/hbrefine.py`) unchanged.
+* **HBRefine outputs** carried forward are designs whose ligand polar atoms were already satisfied (`*_unrefined.pdb`)
+  and designs HBRefine fixed (`*_fixed.pdb`); designs it could not fix (`_unsats`, `_ubp`, `_bothproblems`) are dropped.
 
 ## Module map (original → package)
 

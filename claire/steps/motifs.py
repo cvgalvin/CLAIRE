@@ -19,7 +19,8 @@ from ..project import ClaireError, Project
 Q_POLAR = ["LYS", "ARG", "SER", "THR", "TYR", "TRP", "GLY"]   # partners for ligand acceptors, charged allowed
 POLAR = ["SER", "THR", "TYR", "TRP", "GLY"]
 PROBLEMATIC = ["LYS", "ARG", "GLN", "ASN"]
-ACCEPTORS = ["GLU", "ASP", "GLY"]                                # partners for ligand donors
+ACCEPTORS = ["GLU", "ASP", "GLY"]                                # partners for ligand donors (original)
+ACCEPTORS_REVISED = ["GLU", "ASP", "GLY", "ASN", "GLN", "SER", "THR", "TYR"]
 HYB = {"sp2": "y", "sp3": "n", "sp": "s"}
 
 
@@ -28,7 +29,11 @@ def polar_block(distanceAB, angleA, angleB, torsionA, torsionAB, torsionB, resid
                 ligand_atoms, residue_atoms, distance_tolerance=0.15, angle_A_tolerance=15, angle_B_tolerance=15,
                 torsion_A_tolerance=15, torsion_AB_tolerance=15, torsion_B_tolerance=15,
                 torsion_constraint_sample_number=2, angle_constraint_sample_number=2,
-                distance_constraint_sample_number=0, isbb=False):
+                distance_constraint_sample_number=0, isbb=False,
+                torsion_A_samples=None, torsion_AB_samples=None, torsion_B_samples=None):
+    tA = torsion_constraint_sample_number if torsion_A_samples is None else torsion_A_samples
+    tAB = torsion_constraint_sample_number if torsion_AB_samples is None else torsion_AB_samples
+    tB = torsion_constraint_sample_number if torsion_B_samples is None else torsion_B_samples
     tag = "residue3"
     head = ["  TEMPLATE::   ATOM_MAP: 1 atom_name: {}".format(" ".join(ligand_atoms)),
             "  TEMPLATE::   ATOM_MAP: 1 residue3: {}\n".format(ligand_resname),
@@ -40,9 +45,9 @@ def polar_block(distanceAB, angleA, angleB, torsionA, torsionAB, torsionB, resid
         "  CONSTRAINT:: distanceAB: {0:7.2f} {1:6.2f} {2:6.2f}       0  {3:3}".format(distanceAB, distance_tolerance, 100, distance_constraint_sample_number),
         "  CONSTRAINT::    angle_A: {0:7.2f} {1:6.2f} {2:6.2f}  360.00  {3:3}".format(float(angleA), angle_A_tolerance, 100, angle_constraint_sample_number),
         "  CONSTRAINT::    angle_B: {0:7.2f} {1:6.2f} {2:6.2f}  360.00  {3:3}".format(float(angleB), angle_B_tolerance, 100, angle_constraint_sample_number),
-        "  CONSTRAINT::  torsion_A: {0:7.2f} {1:6.2f} {2:6.2f}  180.00  {3:3}".format(float(torsionA), torsion_A_tolerance, 100, torsion_constraint_sample_number),
-        "  CONSTRAINT::  torsion_B: {0:7.2f} {1:6.2f} {2:6.2f}  360.00  {3:3}".format(float(torsionB), torsion_B_tolerance, 100, torsion_constraint_sample_number),
-        "  CONSTRAINT:: torsion_AB: {0:7.2f} {1:6.2f} {2:6.2f}  360.00  {3:3}".format(float(torsionAB), torsion_AB_tolerance, 100, torsion_constraint_sample_number)]
+        "  CONSTRAINT::  torsion_A: {0:7.2f} {1:6.2f} {2:6.2f}  180.00  {3:3}".format(float(torsionA), torsion_A_tolerance, 100, tA),
+        "  CONSTRAINT::  torsion_B: {0:7.2f} {1:6.2f} {2:6.2f}  360.00  {3:3}".format(float(torsionB), torsion_B_tolerance, 100, tB),
+        "  CONSTRAINT:: torsion_AB: {0:7.2f} {1:6.2f} {2:6.2f}  360.00  {3:3}".format(float(torsionAB), torsion_AB_tolerance, 100, tAB)]
 
 
 def nonpolar_block(distanceAB, angleA, angleB, torsionA, torsionAB, torsionB, residue_resname, ligand_resname,
@@ -69,6 +74,8 @@ OVERRIDE_KEYS = {
     "torsion_AB_tolerance": "torsion_AB_tolerance", "torsion_B_tolerance": "torsion_B_tolerance",
     "distance_samples": "distance_constraint_sample_number", "angle_samples": "angle_constraint_sample_number",
     "torsion_samples": "torsion_constraint_sample_number",
+    "torsion_A_samples": "torsion_A_samples", "torsion_AB_samples": "torsion_AB_samples",
+    "torsion_B_samples": "torsion_B_samples",
 }
 _OVR = {"hbond": {}, "nonpolar": {}}     # set by run() from claire.yaml / --fast
 
@@ -84,14 +91,20 @@ def set_overrides(hbond: dict | None, nonpolar: dict | None) -> None:
 
 def _apply(kind: str, kw: dict) -> dict:
     """Apply user overrides; tolerances of 360 (unconstrained degrees of freedom in workflow.py) stay unconstrained."""
-    for k, v in _OVR[kind].items():
+    ovr = _OVR[kind]
+    for k, v in ovr.items():
         if k.endswith("_tolerance") and kw.get(k) == 360:
             continue
         kw[k] = v
+    # a global torsion_samples override applies to every torsion unless a per-torsion value is also given
+    if "torsion_constraint_sample_number" in ovr:
+        for t in ("torsion_A_samples", "torsion_AB_samples", "torsion_B_samples"):
+            if t not in ovr and t in kw:
+                kw[t] = ovr["torsion_constraint_sample_number"]
     return kw
 
 
-def _hbond_block(res, lig, lig_atoms, donor, hyb):
+def _hbond_block_original(res, lig, lig_atoms, donor, hyb):
     """Exact parameter sets from workflow.py for each (ligand donor/acceptor, hybridization, Gly/side chain) case,
     then any user overrides (motifs.constraints.hbond / --fast)."""
     if not donor:
@@ -114,20 +127,105 @@ def _hbond_block(res, lig, lig_atoms, donor, hyb):
     return polar_block(1.9, 165, 120, 0, 0, 180, **_apply("hbond", kw))
 
 
+GEOMETRY = {"set": "revised"}      # set by run() from motifs.hbond_geometry
+
+# revised parameters (see README): H...A 2.0 +/- 0.3 A; sp2 acceptor angle 135 +/- 20; planarity +/- 30;
+# donor-side angle 165 +/- 15 for all acceptor hybridizations; constrained torsions 2 samples, free torsions 9
+FREE_T, CON_T = 9, 2
+ACCEPTOR_ATOM = {"ASP": "OOC", "GLU": "OOC", "GLY": "OCbb", "ASN": "ONH2", "GLN": "ONH2", "SER": "OH", "THR": "OH", "TYR": "OH"}
+
+
+def _hbond_block(res, lig, lig_atoms, donor, hyb):
+    if GEOMETRY["set"] == "original":
+        return _hbond_block_original(res, lig, lig_atoms, donor, hyb)
+    isbb = res == "GLY"
+    # distance sampled one step (0.3 A) either side of 2.0 A: 1.7-2.3 A hydrogen...acceptor (about 2.6-3.3 A heavy atoms).
+    # Two steps (1.4-2.6 A) admitted donor-acceptor separations shorter than real hydrogen bonds.
+    if not donor:                                        # ligand acceptor, protein donor (polar H)
+        tA_tol = {"y": 30, "s": 360, "n": 360}[hyb]
+        angleA = {"y": 135, "s": 180, "n": 120}[hyb]
+        angleA_tol = {"y": 20, "s": 10, "n": 15}[hyb]
+        kw = dict(residue_resname=res, ligand_resname=lig, ligand_atoms=lig_atoms, residue_atoms="HNbb" if isbb else "Hpol",
+                  distance_tolerance=0.3, angle_A_tolerance=angleA_tol, angle_B_tolerance=15,
+                  torsion_A_tolerance=tA_tol, torsion_AB_tolerance=360, torsion_B_tolerance=360,
+                  distance_constraint_sample_number=1, angle_constraint_sample_number=1, isbb=isbb,
+                  torsion_constraint_sample_number=CON_T,
+                  torsion_A_samples=CON_T if tA_tol < 360 else FREE_T, torsion_AB_samples=FREE_T, torsion_B_samples=FREE_T)
+        return polar_block(2.0, angleA, 165, 180, 0, 0, **_apply("hbond", kw))
+    # ligand donor (first ligand atom = polar H), protein acceptor
+    atom = ACCEPTOR_ATOM.get(res, "OOC")
+    sp2_acc = atom in ("OOC", "OCbb", "ONH2")
+    kw = dict(residue_resname=res, ligand_resname=lig, ligand_atoms=lig_atoms, residue_atoms=atom,
+              distance_tolerance=0.3, angle_A_tolerance=15, angle_B_tolerance=20 if sp2_acc else 15,
+              torsion_A_tolerance=360, torsion_AB_tolerance=360, torsion_B_tolerance=30 if sp2_acc else 360,
+              distance_constraint_sample_number=1, angle_constraint_sample_number=1, isbb=isbb,
+              torsion_constraint_sample_number=CON_T,
+              torsion_A_samples=FREE_T, torsion_AB_samples=FREE_T, torsion_B_samples=CON_T if sp2_acc else FREE_T)
+    return polar_block(2.0, 165, 135 if sp2_acc else 115, 0, 0, 180, **_apply("hbond", kw))
+
+
 def polar_motifs(proj: Project) -> list[list[list[str]]]:
     spec = proj.config.get("polar_atoms") or []
     if not spec:
         raise ClaireError("No polar_atoms defined in claire.yaml (one entry per ligand polar atom to H-bond).")
     m = proj.config["motifs"]
     lig = proj.lig            # must match the NAME in the params file exactly
+    for i, sp in enumerate(spec, 1):
+        if sp.get("donor") and not str(sp["atoms"][0]).upper().startswith("H"):
+            raise ClaireError(
+                f"polar_atoms entry {i} is a ligand donor, so its first atom must be the polar hydrogen "
+                f"(e.g. [H1, O1, C3]); got {sp['atoms']}. The constraint distance (H...acceptor, ~2 A) is measured "
+                "from that first atom.")
+    stat_opts = {}
+    if GEOMETRY["set"] == "statistical":
+        from . import hbstats
+        st = m.get("statistical", {}) or {}
+        min_n = int(st.get("min_observations", 10))
+        report, raws = [], []
+        for i, sp in enumerate(spec):
+            opts, raw = hbstats.analyse(proj, sp, min_n)
+            raws += raw
+            if not sp.get("charged_residues", True):
+                opts = [o for o in opts if o["res"] not in hbstats.CHARGED]
+            total = sum(o["n"] for o in opts)
+            for o in opts:
+                fmt = lambda t: f"{t[0]:.2f} +/- {t[1]:.2f} ({t[2]})" if t[1] < 360 else "free"
+                report.append({"ligand_atom": o["ltrip"][0], "residue": o["res"], "residue_atom": o["ratom"], "n": o["n"],
+                               "weight": round(o["n"] / total, 3), "status": "used",
+                               **{k: fmt(o[k]) for k in ("distance", "angle_A", "angle_B", "torsion_A", "torsion_AB", "torsion_B")}})
+            if opts:
+                stat_opts[i] = [(hbstats.block(o, lig, _apply), o["res"], o["n"]) for o in opts]
+                desc = ", ".join("{} {} x{}".format(o["res"], o["ratom"], o["n"]) for o in opts[:6])
+                more = " ..." if len(opts) > 6 else ""
+                print(f"[motifs] {sp['atoms'][0]}: statistical geometry from {total} H-bonds ({desc}{more})")
+            else:
+                print(f"[motifs] WARNING: {sp['atoms'][0]}: fewer than {min_n} observed H-bonds per residue type in the "
+                      "contacts; using the revised geometry for this atom")
+                report.append({"ligand_atom": sp["atoms"][0], "status": f"fallback to revised (< {min_n} observations)"})
+        out = proj.stage("motifs")
+        hbstats.write_report(out / "hbond_statistics.csv", report)
+        if raws:
+            import csv as _csv
+            with open(out / "hbond_observations.csv", "w", newline="") as fh:
+                w = _csv.DictWriter(fh, fieldnames=list(raws[0]))
+                w.writeheader()
+                w.writerows(raws)
     motifs, nproblematic, ntries = [], 0, 0
     while len(motifs) < int(m["n_polar_motifs"]) and ntries < int(m["max_attempts"]):
         problem_res, ngly, cur, used = 0, 0, [], []
-        for s in spec:
+        for si, s in enumerate(spec):
+            if si in stat_opts:
+                blk, res, _ = random.choices(stat_opts[si], weights=[o[2] for o in stat_opts[si]])[0]
+                used.append(res)
+                ngly += res == "GLY"
+                if res != "GLY" and res in PROBLEMATIC:
+                    problem_res += 1
+                cur.append(blk)
+                continue
             donor = bool(s.get("donor", False))
             hyb = HYB.get(str(s.get("hybridization", "sp2")), "y")
             if donor:
-                res = random.choice(ACCEPTORS)
+                res = random.choice(ACCEPTORS if GEOMETRY["set"] == "original" else ACCEPTORS_REVISED)
             else:
                 res = random.choice(Q_POLAR if s.get("charged_residues", True) else POLAR)
             used.append(res)
@@ -170,7 +268,7 @@ def _cluster_paths(proj: Project) -> list[tuple[str, int]]:
     m = proj.config["motifs"]
     cdir = proj.stage("cluster", False)
     names = {f["name"]: f"Fragment_{i}" for i, f in enumerate(proj.fragments(), 1)}
-    hb = {names.get(n, n) for n in proj.config.get("hbond_fragments") or []}
+    hb = {names.get(n, n) for n in proj.hbond_fragments()}
     np_frags = [names.get(n, n) for n in (m.get("nonpolar_fragments") or [])] or \
                [p.name for p in cdir.iterdir() if p.is_dir() and p.name.startswith("Fragment_") and p.name not in hb]
     paths = []
@@ -281,12 +379,17 @@ def run(proj: Project, args) -> None:
     m = proj.config["motifs"]
     random.seed(int(m.get("seed", 1)))
     out = proj.stage("motifs")
+    GEOMETRY["set"] = str(m.get("hbond_geometry", "revised"))
+    if GEOMETRY["set"] not in ("revised", "original", "statistical"):
+        raise ClaireError("motifs.hbond_geometry must be 'revised', 'original' or 'statistical'.")
+    print(f"[motifs] hydrogen-bond geometry: {GEOMETRY['set']}")
     fast = bool(getattr(args, "fast", False))
     cons = (m.get("fast_preset") if fast else m.get("constraints")) or {}
     set_overrides(cons.get("hbond"), cons.get("nonpolar"))
     mode = "fast preset" if fast else ("custom overrides" if any(cons.get(k) for k in ("hbond", "nonpolar")) else "workflow.py defaults")
     print(f"[motifs] constraint geometry: {mode}")
-    (out / "constraint_settings.json").write_text(__import__("json").dumps({"mode": mode, "overrides": cons}, indent=1))
+    (out / "constraint_settings.json").write_text(__import__("json").dumps({"hbond_geometry": GEOMETRY["set"], "mode": mode,
+                                                                          "overrides": cons}, indent=1))
     polar = polar_motifs(proj)
     pdir = out / "polar"
     pdir.mkdir(exist_ok=True)

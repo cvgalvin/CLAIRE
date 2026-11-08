@@ -39,8 +39,11 @@ def _tasks(proj: Project, out: Path) -> list[Task]:
             if not any(r in f.name for r in RESIDUES):
                 continue
             shutil.copy(f, dst / f.name)
-            tasks.append(Task(f"{tools.python(proj)} {tools.legacy('spatial_cluster.py')} {f.name} {proj.ligand_pdb()}",
-                              str(dst), f"cluster_{frag}_{f.stem}"))
+            if (proj.config.get("cluster", {}) or {}).get("algorithm", "fast") == "original":
+                cmd = f"{tools.python(proj)} {tools.legacy('spatial_cluster.py')} {f.name} {proj.ligand_pdb()}"
+            else:
+                cmd = f"{tools.python(proj)} -m claire.cluster_fast {f.name} {proj.ligand_pdb()}"
+            tasks.append(Task(cmd, str(dst), f"cluster_{frag}_{f.stem}"))
     return tasks
 
 
@@ -88,7 +91,7 @@ def hbond_screen(proj: Project, fragdir: Path, min_pop: int) -> list[str]:
 
 def _collect(proj: Project, out: Path) -> None:
     names = _fragment_name_map(proj)
-    hb = {names.get(n, n) for n in proj.config.get("hbond_fragments") or []}
+    hb = {names.get(n, n) for n in proj.hbond_fragments()}
     summary = {}
     for fragdir in sorted(p for p in out.iterdir() if p.is_dir() and p.name.startswith("Fragment_")):
         n = sum(1 for _ in fragdir.glob("*_clustered/*.pdb"))

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -88,6 +89,77 @@ def bundled_db(proj: Project) -> tuple[dict, dict]:
     return smiles, lig2pdb
 
 
+# ---------------------------------------------------------------- local Chemical Component Dictionary
+CCD_URL = "https://files.wwpdb.org/pub/pdb/data/monomers/components.cif.gz"
+_PREF = [("SMILES_CANONICAL", "OpenEye"), ("SMILES_CANONICAL", "CACTVS"), ("SMILES", "OpenEye"), ("SMILES", "CACTVS"),
+         ("SMILES", "ACDLabs")]
+
+
+def _parse_ccd(gz_path: Path) -> dict:
+    """{comp_id: [(type, program, smiles), ...]} from components.cif.gz (descriptor loop only)."""
+    import gzip
+    import shlex
+    out, comp, in_loop, pending = {}, None, False, None
+    with gzip.open(gz_path, "rt", errors="replace") as fh:
+        for line in fh:
+            if line.startswith("data_"):
+                comp, in_loop, pending = line[5:].strip(), False, None
+                continue
+            if line.startswith("_pdbx_chem_comp_descriptor."):
+                in_loop = True
+                continue
+            if not in_loop:
+                continue
+            if line.startswith(("loop_", "#", "_")) and pending is None:
+                in_loop = line.startswith("_pdbx_chem_comp_descriptor.")
+                continue
+            if pending is not None:                       # multi-line ';' value
+                if line.startswith(";"):
+                    if pending[3]:
+                        out.setdefault(comp, []).append((pending[0], pending[1], pending[3].strip()))
+                        pending = None
+                    else:
+                        pending[3] = line[1:].strip()
+                else:
+                    pending[3] += line.strip()
+                continue
+            try:
+                parts = shlex.split(line)
+            except ValueError:
+                continue
+            if len(parts) >= 5 and parts[0] == comp:
+                out.setdefault(comp, []).append((parts[1], parts[2], parts[4]))
+            elif len(parts) == 4 and parts[0] == comp:
+                pending = [parts[1], parts[2], parts[3], ""]
+    return out
+
+
+def ccd_smiles(max_age_days: float = 30.0) -> dict:
+    """{comp_id: SMILES} for every chemical component in the current CCD (downloaded and cached)."""
+    root = Path(os.environ.get("CLAIRE_CACHE", Path.home() / ".cache" / "claire"))
+    root.mkdir(parents=True, exist_ok=True)
+    js = root / "ccd_smiles.json"
+    if js.exists() and (time.time() - js.stat().st_mtime) < max_age_days * 86400:
+        return json.loads(js.read_text())
+    gz = root / "components.cif.gz"
+    print("[fragments] downloading the Chemical Component Dictionary (~120 MB, cached for later runs)")
+    tmp = gz.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_bytes(_get(CCD_URL, timeout=600))
+    os.replace(tmp, gz)
+    desc = _parse_ccd(gz)
+    smiles = {}
+    for comp, rows in desc.items():
+        for t, prog in _PREF:
+            hit = next((d for tt, pp, d in rows if tt == t and pp.startswith(prog)), None)
+            if hit:
+                smiles[comp] = hit
+                break
+    tmpj = js.with_suffix(f".{os.getpid()}.tmp")
+    tmpj.write_text(json.dumps(smiles))
+    os.replace(tmpj, js)
+    return smiles
+
+
 # ---------------------------------------------------------------- structures
 def _layout(root: Path, pdbid: str) -> Path:
     i = pdbid.lower()
@@ -127,9 +199,9 @@ def fetch_structures(proj: Project, pdb_ids: list[str]) -> tuple[Path, dict]:
                 data = _get(url, timeout=90)
                 if data.lstrip()[:6] in (b"<!DOCT", b"<html>") or len(data) < 200:
                     continue
-                tmp = dst.with_suffix(".tmp")
+                tmp = dst.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")   # unique: safe with shared caches
                 tmp.write_bytes(data)
-                tmp.rename(dst)
+                os.replace(tmp, dst)
                 return pid, src
             except Exception:
                 continue

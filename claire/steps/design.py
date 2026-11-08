@@ -320,8 +320,19 @@ def hbrefine(proj: Project, args) -> None:
     if not getattr(args, "collect", False):
         src = proj.stage("enzdes", False) / "passed"
         raw.mkdir(exist_ok=True)
-        tasks = [Task(f"{tools.python(proj)} {tools.legacy('hbrefine.py')} {proj.params()} {src / n} {raw / Path(n).stem}",
-                      str(d), f"hbrefine_{Path(n).stem}") for n in proj.manifest("enzdes")["designs"]]
+        hb = proj.config.get("hbrefine", {}) or {}
+        names = proj.manifest("enzdes")["designs"]
+        if hb.get("original", False):
+            print("[hbrefine] original (published) HBRefine")
+            tasks = [Task(f"{tools.python(proj)} {tools.legacy('hbrefine.py')} {proj.params()} {src / n} {raw / Path(n).stem}",
+                          str(d), f"hbrefine_{Path(n).stem}") for n in names]
+        else:
+            cap = float(hb.get("max_energy_increase", 1.0))
+            print(f"[hbrefine] fixed HBRefine (beta_nov16, buried-atom checks, role-aware residues; "
+                  f"max energy increase per mutation {cap} REU)")
+            fl = ("" if hb.get("minimize", True) else " no-minimize") + ("" if hb.get("minimize_backbone", True) else " no-backbone")
+            tasks = [Task(f"{tools.python(proj)} -m claire.hbrefine_fixed {proj.params()} {src / n} {raw / Path(n).stem} {cap}{fl}",
+                          str(d), f"hbrefine_{Path(n).stem}") for n in names]
         if not run_tasks(proj, "hbrefine", tasks, label="HBRefine"):
             return
     out = d / "refined"

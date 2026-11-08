@@ -1,5 +1,5 @@
 # Vendored from the original CLAIRE repository (main/extract_align_contacts.py).
-# Only the PDB-REDO path and fragment-input path were changed; see claire/steps/contacts.py.
+# Changed: PDB-REDO path, fragment-input path, and the fragment query (SMARTS from the whole ligand when present).
 
 import json
 import sys
@@ -92,11 +92,18 @@ for current_fragment in list(pdb_search_results_json_data.keys()):
     write pdb files of nonredundant contacts
     '''
     fragment_mol=os.path.join(os.environ.get('CLAIRE_FRAGMENT_DIR','Inputs/Fragment_Inputs'),current_fragment+'.mol') #mol file needs to be in working directory
-    m=Chem.AllChem.MolFromMolFile(fragment_mol,removeHs=False)
+    _smarts=fragment_mol[:-4]+'.smarts'   # CLAIRE: query from the whole ligand's chemistry (atom order = map numbers)
+    if os.path.exists(_smarts):
+        _coords_mol=Chem.MolFromMolFile(fragment_mol,removeHs=False,sanitize=False)
+        m=Chem.MolFromSmarts(open(_smarts).read().strip())
+        m=Chem.RenumberAtoms(m,sorted(range(m.GetNumAtoms()),key=lambda i: m.GetAtomWithIdx(i).GetAtomMapNum()))
+    else:
+        m=Chem.AllChem.MolFromMolFile(fragment_mol,removeHs=False)
+        _coords_mol=m
     # m=Chem.AllChem.MolFromMolFile(fragment_mol)
     fragment_coords=[]
-    for i in range(0, m.GetNumAtoms()):
-        fpos = m.GetConformer().GetAtomPosition(i)
+    for i in range(0, _coords_mol.GetNumAtoms()):
+        fpos = _coords_mol.GetConformer().GetAtomPosition(i)
         fragment_coords.append((fpos.x,fpos.y,fpos.z))#m.GetAtomWithIdx(i).GetSymbol(),
     print('\nprocessing pdbs...')
     if m.GetNumAtoms()<=5:

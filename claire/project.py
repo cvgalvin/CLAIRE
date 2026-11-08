@@ -130,6 +130,8 @@ class Project:
           fragments: [{name: ring, atoms: [C1, C2, C3]}, ...]
         """
         raw = self.config.get("fragments") or []
+        if raw == "auto":
+            raw = [{"name": f["name"], "atoms": f["atoms"]} for f in self.auto_fragments()["fragments"]]
         if raw and all(isinstance(x, str) for x in raw):
             raw = [raw]
         out = []
@@ -147,6 +149,24 @@ class Project:
                     "or the shorthand  fragments: [[C1, C2, C3, C4, C5, C10], [C17, C20, O20, C21]]")
             out.append({"name": str(name), "atoms": [a.strip() for a in atoms]})
         return out
+
+    def auto_fragments(self) -> dict:
+        """Automatic fragment definitions (cached in 02_fragments/auto_fragments.yaml)."""
+        f = self.root / STAGES["fragments"] / "auto_fragments.yaml"
+        if f.exists():
+            return yaml.safe_load(f.read_text())
+        from .steps.autofrag import define
+        d = define(self)
+        d.pop("roles", None)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(yaml.safe_dump(d, sort_keys=False))
+        return d
+
+    def hbond_fragments(self) -> list[str]:
+        hb = self.config.get("hbond_fragments") or []
+        if hb == "auto":
+            return list(self.auto_fragments()["hbond_fragments"])
+        return list(hb)
 
     # ---------- manifests ----------
     def write_manifest(self, key: str, data: dict) -> None:
