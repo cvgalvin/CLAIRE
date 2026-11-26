@@ -14,6 +14,42 @@ project is configured from a single `claire.yaml`.
 
 ---
 
+
+
+
+## Changes in v0.4.3
+
+Group clustering now uses a 0.5 A cutoff by default (was 1.0 A). On the same contacts, 0.5 A separates recurrent
+geometries from chance better for every fragment tested (concentration of contacts in the most populated clusters
+relative to randomly oriented contacts), with equally coherent interaction modes in the top clusters.
+
+## Changes in v0.4.2
+
+Fragment symmetry types carbon-carbon bonds (from the params' bond orders with aromaticity perception), so a C=C is no
+longer equivalent to a C-C: cyclohexenone was given a false mirror symmetry. Bonds to heteroatoms stay untyped, so
+resonance-equivalent atoms (carboxylate and sulfonate oxygens, guanidinium and amidinium nitrogens) remain interchangeable.
+
+## Changes in v0.4.1
+
+Fix: an aromatic N-H (2-pyridone, pyrrole, indole, imidazole) in a target was given a +1 formal charge, because aromatic
+bonds count 1.5 towards the nitrogen's bond-order sum; sanitizing the molecule then failed and `claire fragments`
+stopped. The charge rule now skips aromatic nitrogens, and if the perceived bond orders still cannot be sanitized the
+params' own (Kekule) bond orders are used. Search patterns for all other fragments are unchanged.
+
+## Changes in v0.4.0
+
+**Group clustering (new default).** Contacts are clustered on each residue's interacting functional group plus one
+anchor atom (e.g. the Arg guanidinium, the Phe ring), with a single RMSD cutoff (0.5 A since v0.4.3) for all residue types. The RMSD
+between two contacts is the minimum over the fragment's symmetry-equivalent orientations (derived from its molecular
+graph: 12 for benzene, 6 for guanidine, 2 for a carboxylate or a phenol ring flip) and over the residue's equivalent
+atom namings (Phe/Tyr ring flips, Asp/Glu oxygens, Arg NH1/NH2, Leu/Val methyls). Previously, symmetry-equivalent
+contacts could not cluster together, small residues were compared on one or two atoms, and long side chains on atoms
+far from the contact. `cluster: {method: sidechain, cutoff: 0.5}` reproduces the v0.3 clustering exactly.
+Duplicated atoms (alternate conformations) use the first occurrence.
+
+Also new since v0.3.3: fragments may be given as `atoms: all` (every heavy atom of a small-molecule target), and
+`match_hydrogens: false` drops hydrogen counts from a fragment's search pattern.
+
 ## Installation
 
 ```bash
@@ -218,6 +254,7 @@ Thresholds and Rosetta flags are the original values, all editable in `claire.ya
 repository (contact extraction/filtering, clustering, HBRefine, resfile generation, conformer generation) is vendored
 in `claire/legacy/` with only path handling and pandas 2 compatibility changed; logic that lived inline in
 `workflow.py` (motif assembly, H-bond cluster screen, score filtering, AF2 analysis) is ported into `claire/steps/`.
+Changes worth knowing:
 
 * **ProteinMPNN design region**: the motif residues and all residues within `mpnn.binding_site_cutoff` (10 Å) of
   the ligand are fixed; ProteinMPNN redesigns everything outside the binding-site neighborhood.

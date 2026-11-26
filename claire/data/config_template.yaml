@@ -19,6 +19,11 @@ fragments: []
 #  - name: acetyl
 #    atoms: [C17, C20, O20, C21]
 # Shorthand: fragments: [[C1, C2, C3, C4, C5, C10], [C17, C20, O20, C21]]   (a flat list = a single fragment)
+# Small-molecule fragments: `atoms: all` uses every heavy atom of the target; `match_hydrogens: false` drops the H counts
+# on polar atoms from the search pattern (e.g. guanidine, so all charge states and tautomers match):
+#  - name: guanidine
+#    atoms: all
+#    match_hydrogens: false
 
 # Fragments whose clusters are screened for genuine hydrogen bonds (PyRosetta HBondSet);
 # only H-bonding clusters with at least motifs.min_hbond_cluster_population members are kept.
@@ -66,7 +71,12 @@ compute:
   setup: ""                    # shell lines run before each task on a cluster (e.g. conda activate claire)
 
 cluster:
-  algorithm: fast              # fast (identical clusters, much faster) | original (spatial_cluster.py)
+  method: group                # group (v0.4 default): each residue compared on its interacting functional group plus an
+                               #   anchor atom, in every symmetry-equivalent orientation of the fragment (e.g. 12 for benzene)
+                               #   and every equivalent naming of the residue's atoms (Phe ring flip, Asp/Glu oxygens, ...)
+                               # sidechain: v0.3 clustering (all side-chain atoms, 0.5 A, no symmetry), as used for the
+                               #   designs in the CLAIRE paper | original: the legacy spatial_cluster.py script
+  cutoff: 0.5                  # RMSD cutoff in A (both methods)
 
 contacts:
   min_distance_polar: 2.4       # A; contacts closer to the fragment than this (N/O...N/O pairs) are discarded as artefacts

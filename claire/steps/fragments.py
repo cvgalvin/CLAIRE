@@ -114,7 +114,7 @@ def _fragment_files(proj: Project, outdir: Path) -> list[tuple[str, Path, str, s
         sm = sub.GetMol()
         sm.AddConformer(conf, assignId=True)
         Chem.MolToMolFile(sm, str(outdir / f"{name}.mol"), kekulize=False)
-        smarts_all, smarts_heavy, smiles = fragment_queries(proj, atoms)
+        smarts_all, smarts_heavy, smiles = fragment_queries(proj, atoms, f.get("match_hydrogens", True))
         (outdir / f"{name}.smarts").write_text(smarts_all + "\n")          # extraction (incl. any listed H caps)
         (outdir / f"{name}.search.smarts").write_text(smarts_heavy + "\n")
         out.append((name, outdir / f"{name}.mol", smarts_heavy, smiles))

@@ -130,11 +130,213 @@ def cluster(residues: "OrderedDict[str, list]") -> "OrderedDict[str, list]":
     return out
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Group clustering (v0.4): each residue is compared on its interacting functional group (plus one anchor atom), in
+# every symmetry-equivalent orientation of the fragment and every equivalent naming of the residue's atoms.
+# ---------------------------------------------------------------------------------------------------------------
+GROUP_CUTOFF = 0.5
+GROUPS = {   # residue: (group atoms, anchor first; symmetric renamings, each a set of name pairs exchanged together)
+    "ARG": (["CD", "NE", "CZ", "NH1", "NH2"], [(("NH1", "NH2"),)]),
+    "LYS": (["CD", "CE", "NZ"], []),
+    "ASP": (["CB", "CG", "OD1", "OD2"], [(("OD1", "OD2"),)]),
+    "GLU": (["CG", "CD", "OE1", "OE2"], [(("OE1", "OE2"),)]),
+    "ASN": (["CB", "CG", "OD1", "ND2"], []),
+    "GLN": (["CG", "CD", "OE1", "NE2"], []),
+    "SER": (["CA", "CB", "OG"], []),
+    "THR": (["CA", "CB", "OG1", "CG2"], []),
+    "CYS": (["CA", "CB", "SG"], []),
+    "MET": (["CG", "SD", "CE"], []),
+    "HIS": (["CB", "CG", "ND1", "CD2", "CE1", "NE2"], []),
+    "PHE": (["CB", "CG", "CD1", "CD2", "CE1", "CE2", "CZ"], [(("CD1", "CD2"), ("CE1", "CE2"))]),
+    "TYR": (["CB", "CG", "CD1", "CD2", "CE1", "CE2", "CZ", "OH"], [(("CD1", "CD2"), ("CE1", "CE2"))]),
+    "TRP": (["CB", "CG", "CD1", "CD2", "NE1", "CE2", "CE3", "CZ2", "CZ3", "CH2"], []),
+    "LEU": (["CB", "CG", "CD1", "CD2"], [(("CD1", "CD2"),)]),
+    "ILE": (["CB", "CG1", "CG2", "CD1"], []),
+    "VAL": (["CA", "CB", "CG1", "CG2"], [(("CG1", "CG2"),)]),
+    "ALA": (["N", "CA", "CB"], []),
+    "PRO": (["N", "CB", "CG", "CD"], []),
+}
+
+
+def name_variants(atoms, swaps):
+    """The residue's symmetric renamings (e.g. Phe ring flip: CD1<->CD2 together with CE1<->CE2)."""
+    vs = [list(atoms)]
+    for pairs in swaps:
+        m = {}
+        for a, b in pairs:
+            m[a], m[b] = b, a
+        vs = vs + [[m.get(x, x) for x in v] for v in vs]
+    out = []
+    for v in vs:
+        if v not in out:
+            out.append(v)
+    return out
+
+
+def _kabsch(P, Q):
+    Pc, Qc = P.mean(0), Q.mean(0)
+    U, S, Vt = np.linalg.svd((P - Pc).T @ (Q - Qc))
+    d = np.sign(np.linalg.det(Vt.T @ U.T))
+    R = Vt.T @ np.diag([1, 1, d]) @ U.T
+    return R, Qc - Pc @ R.T
+
+
+def _cc_bond_types(ligand_path, names):
+    """Bond types between carbon atoms, from the ligand's params file next to the model (bond orders with RDKit
+    aromaticity perception, as for fragment search patterns); None if unavailable."""
+    import glob, os
+    from rdkit import Chem
+    params = sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(ligand_path)), "*.params")))
+    if not params:
+        return None
+    atoms, el, bonds = [], {}, []
+    for l in open(params[0]):
+        p = l.split()
+        if l.startswith("ATOM "):
+            atoms.append(p[1])
+        elif l.startswith("BOND_TYPE"):
+            bonds.append((p[1], p[2], p[3]))
+        elif l.startswith("BOND ") and len(p) >= 3:
+            bonds.append((p[1], p[2], "1"))
+    for l in open(ligand_path):
+        if l.startswith(("HETATM", "ATOM")):
+            n = l[12:16].strip()
+            el[n] = (l[76:78].strip() or n.lstrip("0123456789")[0]).capitalize()
+    try:
+        m = Chem.RWMol(); idx = {}
+        for a in atoms:
+            at = Chem.Atom(el[a]); at.SetNoImplicit(True); idx[a] = m.AddAtom(at)
+        bt = {"1": Chem.BondType.SINGLE, "2": Chem.BondType.DOUBLE, "3": Chem.BondType.TRIPLE, "4": Chem.BondType.AROMATIC}
+        for a, b, o in bonds:
+            if m.GetBondBetweenAtoms(idx[a], idx[b]) is None:
+                m.AddBond(idx[a], idx[b], bt.get(o, Chem.BondType.SINGLE))
+        mol = m.GetMol()
+        for a in mol.GetAtoms():                      # formal charges implied by valence, as in autofrag.parent_mol
+            if a.GetSymbol() == "O" and a.GetDegree() == 1 and mol.GetBondBetweenAtoms(a.GetIdx(), a.GetNeighbors()[0].GetIdx()).GetBondType() == Chem.BondType.SINGLE \
+                    and a.GetNeighbors()[0].GetSymbol() != "H":
+                a.SetFormalCharge(-1)
+            if a.GetSymbol() == "N" and not any(b.GetBondType() == Chem.BondType.AROMATIC for b in a.GetBonds()) \
+                    and sum(b.GetBondTypeAsDouble() for b in a.GetBonds()) == 4:
+                a.SetFormalCharge(1)
+        Chem.SanitizeMol(mol)
+    except Exception:
+        return None
+    out = {}
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            if a in idx and b in idx and el.get(a) == "C" and el.get(b) == "C":
+                bd = mol.GetBondBetweenAtoms(idx[a], idx[b])
+                if bd is not None:
+                    out[frozenset((a, b))] = bd.GetBondType()
+    return out
+
+
+def fragment_symmetry(ligand_path, fragment_atoms):
+    """Rigid transforms (R, t) mapping the fragment onto itself, one per automorphism of its heavy-atom graph
+    (12 for benzene, 6 for guanidine, 2 for a carboxylate or a phenol ring flip, 1 for an asymmetric fragment).
+    Carbon-carbon bonds are typed (from the params' bond orders with aromaticity perception, else from bond length),
+    so a C=C is not equivalent to a C-C (cyclohexenone has no mirror symmetry); bonds to heteroatoms are left untyped,
+    so resonance-equivalent atoms stay interchangeable (carboxylate and sulfonate oxygens, guanidinium nitrogens)."""
+    names, xyz, els = [], [], []
+    for l in open(ligand_path):
+        if l.startswith(("HETATM", "ATOM")):
+            n = l[12:16].strip()
+            if n in fragment_atoms:
+                names.append(n)
+                xyz.append([float(l[30:38]), float(l[38:46]), float(l[46:54])])
+                els.append((l[76:78].strip() or n.lstrip("0123456789")[0]).capitalize())
+    X = np.array(xyz)
+    if len(X) < 3:
+        return [(np.eye(3), np.zeros(3))]
+    from rdkit import Chem
+    typed = _cc_bond_types(ligand_path, names)
+    rw = Chem.RWMol()
+    for e in els:
+        rw.AddAtom(Chem.Atom(e))
+    for a in range(len(X)):
+        for b in range(a + 1, len(X)):
+            d = np.linalg.norm(X[a] - X[b])
+            if d < 1.75:
+                t = Chem.BondType.SINGLE
+                if els[a] == "C" and els[b] == "C":
+                    if typed is not None and frozenset((names[a], names[b])) in typed:
+                        t = typed[frozenset((names[a], names[b]))]
+                    elif typed is None:
+                        t = (Chem.BondType.TRIPLE if d < 1.25 else Chem.BondType.DOUBLE if d < 1.37
+                             else Chem.BondType.AROMATIC if d < 1.44 else Chem.BondType.SINGLE)
+                rw.AddBond(a, b, t)
+    m = rw.GetMol()
+    m.UpdatePropertyCache(strict=False)
+    ops = []
+    for p in m.GetSubstructMatches(m, uniquify=False, useChirality=False, maxMatches=500):
+        R, t = _kabsch(X, X[list(p)])
+        if np.sqrt((((X @ R.T + t) - X[list(p)]) ** 2).sum(1).mean()) < 0.3:     # proper rigid symmetries only
+            ops.append((R, t))
+    return ops or [(np.eye(3), np.zeros(3))]
+
+
+def cluster_groups(lines, rows, resname, ops, cutoff=GROUP_CUTOFF):
+    """Greedy clustering (same order and output as cluster()) on the residue's functional group; the RMSD between two
+    contacts is the minimum over the fragment's symmetry operations and the residue's symmetric atom namings.
+    Contacts lacking any group atom stay unclustered."""
+    from scipy.spatial import cKDTree
+    keys = list(rows)
+    atoms, swaps = GROUPS[resname]
+    variants = name_variants(atoms, swaps)
+    coords, ok = [], []
+    for k in keys:
+        A = {}
+        for i in rows[k]:
+            A.setdefault(lines[i][12:16].strip(), np.array([float(lines[i][30:38]), float(lines[i][38:46]),
+                                                            float(lines[i][46:54])]))
+        if all(a in A for a in atoms):
+            coords.append([[A[a] for a in v] for v in variants])
+            ok.append(True)
+        else:
+            coords.append(None)
+            ok.append(False)
+    idx = [i for i in range(len(keys)) if ok[i]]
+    out = OrderedDict()
+    if len(idx) < 2:
+        return out
+    X = np.array([coords[i] for i in idx])                                        # (n, variants, atoms, 3)
+    imgs = np.einsum("nvad,ode->novae", X, np.array([R.T for R, t in ops])) + np.array([t for R, t in ops])[None, :, None, None, :]
+    ref = X[:, 0]
+    cent = imgs.mean(axis=3).reshape(len(idx), -1, 3)
+    owner = np.repeat(np.arange(len(idx)), cent.shape[1])
+    tree = cKDTree(cent.reshape(-1, 3))
+    done = np.zeros(len(idx), bool)
+    for a in range(len(idx)):
+        if done[a]:
+            continue
+        done[a] = True
+        cand = np.unique(owner[tree.query_ball_point(ref[a].mean(0), cutoff + 1e-9)])
+        cand = cand[~done[cand]]
+        members = [int(b) for b in cand
+                   if np.sqrt(((imgs[b] - ref[a]) ** 2).sum(-1).mean(-1)).min() <= cutoff]
+        if members:
+            done[members] = True
+            out[keys[idx[a]]] = [keys[idx[b]] for b in sorted(members)]
+    return out
+
+
 def main(argv=None):
-    argv = argv or sys.argv[1:]
-    rfb, ligand_path = argv[0], argv[1]
+    import argparse
+    ap = argparse.ArgumentParser(description="cluster one per-residue contact file")
+    ap.add_argument("fuzzball"); ap.add_argument("ligand")
+    ap.add_argument("--method", choices=["group", "sidechain"], default="sidechain",
+                    help="group: functional group + symmetry (v0.4 default via claire cluster); sidechain: original")
+    ap.add_argument("--cutoff", type=float, default=GROUP_CUTOFF)
+    ap.add_argument("--fragment-atoms", default="", help="comma-separated fragment heavy atoms (group method)")
+    a = ap.parse_args(argv if argv is not None else sys.argv[1:])
+    rfb, ligand_path = a.fuzzball, a.ligand
     lines, residues, rows = read_fuzzball(rfb)
-    clusters = cluster(residues)
+    resname = lines[0][17:20] if lines else ""
+    if a.method == "group" and resname in GROUPS:
+        ops = fragment_symmetry(ligand_path, set(x for x in a.fragment_atoms.split(",") if x))
+        clusters = cluster_groups(lines, rows, resname, ops, a.cutoff)
+    else:
+        clusters = cluster(residues)
     pops = sorted(((k, len(v) + 1) for k, v in clusters.items()), key=lambda x: -x[1])
     try:                                   # population plot, as in the original
         import matplotlib

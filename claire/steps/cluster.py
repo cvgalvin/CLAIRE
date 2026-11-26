@@ -28,8 +28,18 @@ def _fragment_name_map(proj: Project) -> dict:
     return {f["name"]: f"Fragment_{i}" for i, f in enumerate(proj.fragments(), 1)}
 
 
+def _settings(proj: Project) -> tuple[str, float]:
+    """cluster: {method: group | sidechain | original, cutoff: 0.5}.  group (default, v0.4): functional group plus
+    fragment/residue symmetry; sidechain: the v0.3 clustering (all side-chain atoms, 0.5 A); original: legacy script."""
+    c = proj.config.get("cluster", {}) or {}
+    method = c.get("method") or {"original": "original", "fast": "sidechain"}.get(c.get("algorithm", ""), "group")
+    return method, float(c.get("cutoff", 0.5))
+
+
 def _tasks(proj: Project, out: Path) -> list[Task]:
     m = proj.manifest("contacts")
+    method, cutoff = _settings(proj)
+    atoms = {f"Fragment_{i}": ",".join(f["atoms"]) for i, f in enumerate(proj.fragments(), 1)}
     tasks = []
     for frag, rel in m["residue_fuzzballs"].items():
         src = proj.stage("contacts", False) / rel
@@ -39,10 +49,13 @@ def _tasks(proj: Project, out: Path) -> list[Task]:
             if not any(r in f.name for r in RESIDUES):
                 continue
             shutil.copy(f, dst / f.name)
-            if (proj.config.get("cluster", {}) or {}).get("algorithm", "fast") == "original":
+            if method == "original":
                 cmd = f"{tools.python(proj)} {tools.legacy('spatial_cluster.py')} {f.name} {proj.ligand_pdb()}"
+            elif method == "sidechain":
+                cmd = f"{tools.python(proj)} -m claire.cluster_fast {f.name} {proj.ligand_pdb()} --method sidechain"
             else:
-                cmd = f"{tools.python(proj)} -m claire.cluster_fast {f.name} {proj.ligand_pdb()}"
+                cmd = (f"{tools.python(proj)} -m claire.cluster_fast {f.name} {proj.ligand_pdb()} --method group "
+                       f"--cutoff {cutoff} --fragment-atoms {atoms[frag]}")
             tasks.append(Task(cmd, str(dst), f"cluster_{frag}_{f.stem}"))
     return tasks
 
@@ -99,7 +112,9 @@ def _collect(proj: Project, out: Path) -> None:
         if fragdir.name in hb:
             summary[fragdir.name]["hbond_clusters"] = hbond_screen(
                 proj, fragdir, int(proj.config["motifs"]["min_hbond_cluster_population"]))
-    proj.write_manifest("cluster", {"fragments": summary, "n_outputs": sum(v["n_clusters"] for v in summary.values())})
+    method, cutoff = _settings(proj)
+    proj.write_manifest("cluster", {"fragments": summary, "n_outputs": sum(v["n_clusters"] for v in summary.values()),
+                                    "method": method, "cutoff": cutoff})
     print("[cluster] done. Next: define polar_atoms in claire.yaml, then `claire motifs`.")
 
 

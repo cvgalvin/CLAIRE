@@ -128,6 +128,9 @@ class Project:
           fragments: [C1, C2, C3]                     -> one fragment
           fragments: [[C1, C2, C3], [C17, C20, O20]]  -> two fragments
           fragments: [{name: ring, atoms: [C1, C2, C3]}, ...]
+          fragments: [{name: acid, atoms: all}]       -> every heavy atom of the target (small-molecule fragments)
+        Optional per fragment: match_hydrogens: false   -> search pattern without H counts on polar atoms
+        (e.g. guanidine, so all charge states and tautomers match).
         """
         raw = self.config.get("fragments") or []
         if raw == "auto":
@@ -136,8 +139,13 @@ class Project:
             raw = [raw]
         out = []
         for i, f in enumerate(raw, 1):
+            match_h = True
             if isinstance(f, dict):
                 atoms, name = f.get("atoms"), f.get("name", f"Fragment_{i}")
+                match_h = bool(f.get("match_hydrogens", True))
+                if atoms == "all":                       # every heavy atom of the target (small-molecule fragments)
+                    atoms = [l[12:16].strip() for l in self.ligand_pdb().read_text().splitlines()
+                             if l.startswith(("ATOM", "HETATM")) and (l[76:78].strip() or l[12:16].strip()[0]) != "H"]
             elif isinstance(f, (list, tuple)):
                 atoms, name = list(f), f"Fragment_{i}"
             else:
@@ -147,7 +155,7 @@ class Project:
                     f"fragments entry {i} is not understood: {f!r}. Use, for example:\n"
                     "fragments:\n  - name: ring\n    atoms: [C1, C2, C3, C4, C5, C10]\n"
                     "or the shorthand  fragments: [[C1, C2, C3, C4, C5, C10], [C17, C20, O20, C21]]")
-            out.append({"name": str(name), "atoms": [a.strip() for a in atoms]})
+            out.append({"name": str(name), "atoms": [a.strip() for a in atoms], "match_hydrogens": match_h})
         return out
 
     def auto_fragments(self) -> dict:

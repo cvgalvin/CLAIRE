@@ -62,6 +62,25 @@ def chemistry(proj: Project):
     return atoms, heavy, el, nb, arom_bond, double
 
 
+def _rebuild_from_params(proj, atoms, bonds, el, idx_template=None):
+    """parent_mol with the bond orders written in the params file (used when the perceived orders cannot be sanitized)."""
+    from rdkit import Chem
+    m = Chem.RWMol(); idx = {}
+    for a in atoms:
+        at = Chem.Atom(el[a].capitalize()); at.SetNoImplicit(True); at.SetProp("name", a); idx[a] = m.AddAtom(at)
+    bt = {"1": Chem.BondType.SINGLE, "2": Chem.BondType.DOUBLE, "3": Chem.BondType.TRIPLE, "4": Chem.BondType.AROMATIC}
+    for a, b, o in bonds:
+        m.AddBond(idx[a], idx[b], bt.get(o, Chem.BondType.SINGLE))
+    xyz = {l[12:16].strip(): (float(l[30:38]), float(l[38:46]), float(l[46:54]))
+           for l in proj.ligand_pdb().read_text().splitlines() if l.startswith(("ATOM", "HETATM"))}
+    conf = Chem.Conformer(len(atoms))
+    for a, i in idx.items():
+        conf.SetAtomPosition(i, xyz[a])
+    mol = m.GetMol(); mol.AddConformer(conf, assignId=True)
+    Chem.SanitizeMol(mol)
+    return mol, idx
+
+
 def parent_mol(proj: Project):
     """Whole ligand as an RDKit molecule (atom order = params order, explicit H, perceived bond orders and aromaticity,
     model coordinates); atom names in the 'name' property. Returns (mol, {name: index})."""
@@ -91,16 +110,25 @@ def parent_mol(proj: Project):
         if a.GetSymbol() == "O" and a.GetDegree() == 1 and mol.GetBondBetweenAtoms(a.GetIdx(), a.GetNeighbors()[0].GetIdx()).GetBondType() == Chem.BondType.SINGLE \
                 and a.GetNeighbors()[0].GetSymbol() != "H":
             a.SetFormalCharge(-1)
-        if a.GetSymbol() == "N" and sum(b.GetBondTypeAsDouble() for b in a.GetBonds()) == 4:
+        # quaternary N+ only where bond orders are unambiguous: an aromatic bond counts 1.5, so an aromatic N-H
+        # (pyridone, pyrrole, indole, imidazole) would otherwise sum to 4 and be charged wrongly
+        if a.GetSymbol() == "N" and not any(b.GetIsAromatic() or b.GetBondType() == Chem.BondType.AROMATIC for b in a.GetBonds()) \
+                and sum(b.GetBondTypeAsDouble() for b in a.GetBonds()) == 4:
             a.SetFormalCharge(1)
     try:
         Chem.SanitizeMol(mol)
     except Exception:
-        Chem.SanitizeMol(mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
+        try:
+            Chem.SanitizeMol(mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
+        except Exception:
+            if orders:                                    # last resort: the params' own (Kekule) bond orders
+                orders = None
+                return _rebuild_from_params(proj, atoms, bonds, el, idx_template=None)
+            raise
     return mol, idx
 
 
-def fragment_queries(proj: Project, atoms: list[str]):
+def fragment_queries(proj: Project, atoms: list[str], match_hydrogens: bool = True):
     """(extraction SMARTS incl. listed H, search SMARTS heavy atoms only, RCSB query SMILES) for a fragment.
     Aromaticity comes from the whole ligand; charges are left unspecified; atom map numbers give file order."""
     from rdkit import Chem
@@ -117,6 +145,8 @@ def fragment_queries(proj: Project, atoms: list[str]):
     # fragment does not match aryl ethers or esters)
     hcount = {i: sum(1 for nb_ in mol.GetAtomWithIdx(i).GetNeighbors() if nb_.GetAtomicNum() == 1)
               for i in order if mol.GetAtomWithIdx(i).GetSymbol() in ("O", "N", "S")}
+    if not match_hydrogens:                       # e.g. guanidine: match every charge state and tautomer
+        hcount = {}
 
     def to_smarts(use, maps):
         for a in q.GetAtoms():
@@ -144,6 +174,8 @@ def fragment_queries(proj: Project, atoms: list[str]):
     Chem.Kekulize(k, clearAromaticFlags=True)
     smiles = Chem.MolFragmentToSmiles(k, atomsToUse=heavy, kekuleSmiles=True, isomericSmiles=False)
     # RCSB's substructure search is sensitive to the bond representation: also offer the aromatic form when valid
+    for a in q.GetAtoms():                     # atom-map numbers from the SMARTS above must not reach the RCSB query
+        a.SetAtomMapNum(0)
     arom = Chem.MolFragmentToSmiles(q, atomsToUse=heavy, isomericSmiles=False)
     if Chem.MolFromSmiles(arom) is not None and arom != smiles:
         smiles = smiles + "|" + arom
